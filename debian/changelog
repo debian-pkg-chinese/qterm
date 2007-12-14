@@ -1,3 +1,10 @@
+qterm (1:0.4.0-7) UNRELEASED; urgency=low
+
+  * NOT RELEASED YET
+  * debian/watch: updated. 
+
+ -- LI Daobing <lidaobing@gmail.com>  Tue, 27 Nov 2007 21:54:32 +0800
+
 qterm (1:0.4.0-6) unstable; urgency=low
 
   * control: s/Home Page/Homepage/
