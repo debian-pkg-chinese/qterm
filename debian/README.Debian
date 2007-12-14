@@ -1,0 +1,16 @@
+                                             -*- outline -*-
+
+* setup detecting location from ip environment
+
+  1. Download a QQWry.dat. This file has many versions and frequently
+     updated. for example, you can download it from www.cz88.net, it
+     include simplified chinese version[1] and traditional chinsese
+     version[2]. You can uncompress it with unrar package.
+
+     [1] http://update.cz88.net/soft/qqwry.rar
+     [2] http://update.cz88.net/soft/qqwrybig5.rar
+
+  2. Copy QQWry.dat to /usr/share/qterm/ or $HOME/.qterm/
+  
+  3. When you restart qterm, you can see the locations show on
+     statusbar when your mouse is over an ip address.

@@ -1,0 +1,7 @@
+?package(qterm):\
+  needs="X11"\
+  section="Applications/Network/Communication"\
+  title="QTerm"\
+  icon32x32="/usr/share/pixmaps/qterm_32x32.xpm"\
+  icon16x16="/usr/share/pixmaps/qterm_16x16.xpm"\
+  command="/usr/bin/qterm"

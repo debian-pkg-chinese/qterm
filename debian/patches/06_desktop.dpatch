@@ -1,0 +1,23 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 06_desktop.dpatch by LI Daobing <lidaobing@gmail.com>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: satisfy desktop-file-validate
+
+@DPATCH@
+diff -urNad qterm~/qterm/qterm.desktop.in qterm/qterm/qterm.desktop.in
+--- qterm~/qterm/qterm.desktop.in	2006-07-10 07:36:12.000000000 +0000
++++ qterm/qterm/qterm.desktop.in	2007-10-09 22:15:21.000000000 +0000
+@@ -1,5 +1,5 @@
+ [Desktop Entry]
+-Categories=Application;Network;
++Categories=Network;
+ Encoding=UTF-8
+ Type=Application
+ Name=QTerm
+@@ -8,5 +8,4 @@
+ GenericName[zh_CN]=BBS 客户端程序
+ GenericName[zh_TW]=BBS 客戶端程式
+ Comment=BBS client based on Qt library in linux
+-MimeTypes=
+ Terminal=false

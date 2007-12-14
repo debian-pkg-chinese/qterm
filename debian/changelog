@@ -1,0 +1,229 @@
+qterm (1:0.4.0-6) unstable; urgency=low
+
+  * control: s/Home Page/Homepage/
+  * compat: 4 -> 5
+    - control: depends on debhelper >= 5
+  * patches/04_make-isIllChar-more-strict.dpatch: added.
+  * patches/05_distinguish-URL-spans-over-many-rows.dpatch: added.
+  * patches/06_desktop.dpatch: added.
+  * patches/00list: updated.
+  * qterm.menu: menu transition.
+
+ -- LI Daobing <lidaobing@gmail.com>  Tue, 09 Oct 2007 22:18:35 +0000
+
+qterm (1:0.4.0-5) unstable; urgency=low
+
+  * rename docs -> qterm.docs
+  * add qterm.manpages
+    - update rules
+  * add qterm.install
+    - udpate rules
+    - remove dirs
+  * rename menu -> qterm.menu
+  * hurd-i386 now has libarts1-dev (Closes: #434434)
+    - update control.
+
+ -- LI Daobing <lidaobing@gmail.com>  Thu, 26 Jul 2007 00:12:08 +0800
+
+qterm (1:0.4.0-4) unstable; urgency=low
+
+  * fix FTBFS on hurd-i386, Thanks Cyril Brulebois (closes: #391300)
+
+ -- LI Daobing <lidaobing@gmail.com>  Fri,  6 Oct 2006 07:38:46 +0800
+
+qterm (1:0.4.0-3) unstable; urgency=low
+
+  * rules:
+    - rewrite the ts->pm script
+    - clean: add 'rm -f subdirs'
+  * control: add XS-Python-Version XB-Python-Version (closes: #380925)
+
+ -- LI Daobing <lidaobing@gmail.com>  Wed,  9 Aug 2006 16:46:09 +0800
+
+qterm (1:0.4.0-2) unstable; urgency=low
+
+  * set ygh as the uploader.
+  * debian/control: depends on python-dev instead of python2.3-dev
+  * ship qterm.1 directly, does not build depends on docbook tools
+  * debian/rules: do not clean desktop file
+  * debian/rules: regeneate pm file from ts
+
+ -- LI Daobing <lidaobing@gmail.com>  Wed, 12 Jul 2006 20:45:28 +0800
+
+qterm (1:0.4.0-1) unstable; urgency=low
+
+  * new upstream release
+    - delete patches/03-icon.dpatch
+
+ -- LI Daobing <lidaobing@gmail.com>  Mon, 10 Jul 2006 19:14:36 +0800
+
+qterm (0.4.0pre4-1) unstable; urgency=low
+
+  * new upstream release
+    - delete patches/01-amd64.dpatch
+    - delete patches/10_g++-4.1-fix.dpatch, thanks nmu (closes: #355663)
+  * delete patches/02-openssl.dpatch (openssl fix bug#333101 in 0.9.8a-4)
+    - control: build depend on libssl-dev (>= 0.9.8a-4)
+  * add patches/03-icon.dpatch: wrong icon name
+  * update patches/00list
+  * debian/control: change Standards-Version to 3.7.2
+  * debian/docs: remove debian/README.Debian
+  * debian/rules: do not clean subdirs
+
+ -- LI Daobing <lidaobing@gmail.com>  Thu, 29 Jun 2006 01:15:15 +0800
+
+qterm (0.4.0pre3-2.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Applied patch by Martin Michlmayr to fix FTBFS with gcc 4.1 (Closes:
+    #355663)
+
+ -- Alexander Schmehl <tolimar@debian.org>  Wed, 21 Jun 2006 19:11:58 +0200
+
+qterm (0.4.0pre3-2) unstable; urgency=low
+
+  * rebuild depends on libssl-dev (>= 0.9.8-1)
+  * configure with '--enable-arts --enable-esd'
+  * patches/02-openssl.dpatch: 
+    work with one libssl-dev's bug(#333101) (closes: #337450)
+
+ -- LI Daobing <lidaobing@gmail.com>  Mon, 10 Oct 2005 19:11:05 +0800
+
+qterm (0.4.0pre3-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/copyright: 
+    - new fsf address
+    - update copyright information
+  * debian/menu: fix format
+  * debian/control: update package description
+  * debian/README.Debian: how to setup detecting location from ip environment
+  * debian/qterm.dbk: new manpage in docbook format
+  * use dpatch to manage patches
+    - 01-amd64.dpatch: make qterm buildable under amd64.
+
+ -- LI Daobing <lidaobing@gmail.com>  Sat, 10 Sep 2005 06:18:43 +0800
+
+qterm (0.4.0pre2.ds.3-2) unstable; urgency=low
+
+  * ABI transition
+  * debian/control: change Standards-Version to 3.6.2
+
+ -- LI Daobing <lidaobing@gmail.com>  Sat, 13 Aug 2005 19:34:10 +0800
+
+qterm (0.4.0pre2.ds.3-1) unstable; urgency=low
+
+  * New upstream release(clean source to satisfy lintian and linda)
+  * New Maintainer(closes: #310552)
+
+ -- Li Daobing <lidaobing@gmail.com>  Thu, 26 May 2005 11:55:35 +0800
+
+qterm (0.4.0pre2-0.3) unstable; urgency=low
+
+  * NMU.
+  * Add icon. (closes: #289970)
+  * del admin/CVS.
+  * debian/control
+    - update Standards-Version to 3.6.1.
+    - update debhelper to 4.1.0(statisfy compat and cdbs)
+  * del debian/manpage.1.ex debian/manpage.sgml.ex
+
+ -- Li Daobing <lidaobing@gmail.com>  Tue, 17 May 2005 07:34:12 +0800
+
+qterm (0.4.0pre2-0.2) unstable; urgency=HIGH
+
+  * Non-maintainer upload.
+  * Applied a patch from Andreas Jochens <aj@andaco.de> to fix ambiguous use
+    of an overloaded function. (closes: #288390)
+
+ -- Rob Bradford <robster@debian.org>  Fri,  7 Jan 2005 22:26:15 +0000
+
+qterm (0.4.0pre2-0.1) unstable; urgency=low
+
+  * NMU.
+  * New upstream release
+
+ -- Yu Guanghui <ygh@debian.org>  Sun,  2 Jan 2005 14:18:29 +0800
+
+qterm (0.4.0pre1-0.1) unstable; urgency=low
+
+  * NMU.
+  * New upstream release
+  * It maybe isn't a real bug. (closes:Bug#272840)
+
+ -- Yu Guanghui <ygh@debian.org>  Mon,  4 Oct 2004 19:53:22 +0800
+
+qterm (0.3.9-0.2) unstable; urgency=low
+
+  * NMU
+    * Fixed build errors.
+
+ -- Yu Guanghui <ygh@debian.org>  Wed, 22 Sep 2004 00:27:17 +0800
+
+qterm (0.3.9-0.1) unstable; urgency=low
+
+  * NMU.
+  * New upstream release
+  * Linked with libqt3-mt-dev. (closes:Bug#187313)
+
+ -- Yu Guanghui <ygh@debian.org>  Mon, 20 Sep 2004 21:26:58 +0800
+
+
+qterm (0.3.9-1) unstable; urgency=low
+
+  * add more python callback
+  * zmodem problem
+  * bugfix
+
+ -- Xiaoqiang Wang <xiaokiangwang@yahoo.com.cn>  Thu, 16 Sep 2004 20:55:06 +0200
+
+qterm (0.3.8-2) unstable; urgency=low
+
+  * watch: Renamed to watch.ex because it is not an offical debian
+    pachage.
+  * rules, control: Migrated to CDBS, this fixed the failure of deb
+    pachage building.
+
+ -- SU Yong <yoyosu@ustc.edu.cn>  Tue, 24 Aug 2004 20:48:43 +0800
+
+qterm (0.3.8-1) unstable; urgency=low
+
+  * Great improvements
+
+ -- Xiaoqiang Wang <xiaokiangwang@yahoo.com.cn>  Tue, 24 Aug 2004 11:42:09 +0200
+ 
+qterm (0.2.0-2) unstable; urgency=low
+
+  * New upstream release (official upload to Debian archive).
+  * Build-Depends: libqt3-compat-headers.  Thanks to upstream author
+    Xiaoqiang Wang for the tip!
+
+ -- Anthony Fok <foka@debian.org>  Wed, 16 Apr 2003 00:44:42 +0800
+
+qterm (0.2.0-1) unstable; urgency=low
+
+  * 0.2.x first release.
+  * Provided on upstream website; not uploaded to Debian.
+
+ -- Xiaoqiang Wang <xiaokiangwang@yahoo.com.cn>  Thu, 10 Apr 2003 17:10:22 +0800
+
+qterm (0.1.9+0.2.0pre2-2) unstable; urgency=medium
+
+  * FTBFS: Missing Build-Depends: xutils (autoconf needs xmkmf to detect X).
+    Thanks to Adam Conrad and James Troup for the bug report and solution!
+    (Closes: Bug#187115)
+
+ -- Anthony Fok <foka@debian.org>  Wed,  2 Apr 2003 01:34:56 +0800
+
+qterm (0.1.9+0.2.0pre2-1) unstable; urgency=low
+
+  * New upstream development version 0.2.0pre2.
+
+ -- Anthony Fok <foka@debian.org>  Tue,  1 Apr 2003 10:52:45 +0800
+
+qterm (0.1.4-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Anthony Fok <foka@debian.org>  Sat, 16 Mar 2002 16:57:20 +0800
+

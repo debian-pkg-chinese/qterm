@@ -1,0 +1,24 @@
+Source: qterm
+Section: x11
+Priority: optional
+Maintainer: LI Daobing <lidaobing@gmail.com>
+Uploaders: Yu Guanghui <ygh@debian.org>
+Build-Depends: cdbs (>= 0.4.23-1.1), autotools-dev, debhelper(>= 5),
+ libqt3-mt-dev, libqt3-compat-headers, xutils, python-dev,
+ libssl-dev (>= 0.9.8a-4), libesd0-dev, libarts1-dev, dpatch
+Standards-Version: 3.7.2
+XS-Python-Version: current
+Vcs-Browser: http://pkg-newedit.googlecode.com/svn/unstable/qterm
+Vcs-Svn: http://pkg-newedit.googlecode.com/svn/unstable/qterm
+Homepage: http://qterm.sourceforge.net/
+
+Package: qterm
+Architecture: any
+Depends: ${shlibs:Depends}
+XB-Python-Version: ${python:Versions}
+Description: BBS client for X Window System written in Qt
+ QTerm is a BBS client for X Window System. It supports telnet and ssh1
+ protocols. It also supports zmodem, URL detect, mouse action.
+ .
+ It also supports detecting location from ip address, but you need do
+ some extra work, see README.Debian.
