@@ -1,8 +1,10 @@
 #! /bin/sh /usr/share/dpatch/dpatch-run
-## 07_copy_colorful_article.dpatch by luohandsome@bbs.newsmth.net
+## 07_copy_colorful_article.dpatch by luohandsome@newsmth.net
 ##
 ## All lines beginning with `## DP:' are a description of the patch.
 ## DP: support copy the text in qterm with color
+## DP: Copyright: 2008 luohandsome@newsmth.net
+## DP: License: GPLv2
 
 @DPATCH@
 diff -urNad qterm~/qterm/qtermframe.cpp qterm/qterm/qtermframe.cpp

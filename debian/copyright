@@ -1,20 +1,32 @@
-This package was debianized by Anthony Fok <foka@debian.org> on
-Sat, 16 Mar 2002 09:36:49 +0800.
+This package was downloaded from http://qterm.sourceforge.net
 
-It was downloaded from
-
-    http://qterm.sourceforge.net
-
-Upstream Authors:
-
-    kingson <xiaokiangwang@yahoo.com.cn>
-    fiasco <yinshouyi@peoplemail.com.cn>
-    hooey <hephooey@hotmail.com>
-
+Files: debian/*
 Copyright:
+  2002-2003 Anthony Fok <foka@debian.org>
+  2003-2004 Xiaoqiang Wang <xiaokiangwang@yahoo.com.cn>
+  2004 SU Yong <yoyosu@ustc.edu.cn>
+  2004-2005 Yu Guanghui <ygh@debian.org>
+  2005 Rob Bradford <robster@debian.org>
+  2005 Alexander Schmehl <tolimar@debian.org>
+  2005-2008 LI Daobing <lidaobing@gmail.com>
+License: GPL-2+
+ On Debian systems, the complete text of the GNU General Public License
+ can be found in file "/usr/share/common-licenses/GPL-2".
 
-    QTerm is Copyright (C) 2001-2004, The QTerm Developers
+Files: debian/patches/07_copy_colorful_article.dpatch 
+Copyright:
+  2008 luohandsome@newsmth.net
+License: GPL-2  
+ On Debian systems, the complete text of the GNU General Public License
+ can be found in file "/usr/share/common-licenses/GPL-2".
 
+Files: *
+Copyright:
+  kingson <xiaokiangwang@yahoo.com.cn>
+  fiasco <yinshouyi@peoplemail.com.cn>
+  hooey <hephooey@hotmail.com>
+  2001-2004, The QTerm Developers
+License: GPL-2+
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 2 of the License, or
@@ -30,4 +42,81 @@ Copyright:
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
   On Debian systems, the complete text of the GNU General Public License
-  may be found in /usr/share/common-licenses/GPL.
+  may be found in /usr/share/common-licenses/GPL-2.
+
+Files: qterm/trayicon.h qterm/trayicon.cpp
+Copyright:
+  2001, 2002 Justin Karneges
+License: GPL-2+
+  On Debian systems, the complete text of the GNU General Public License
+  may be found in /usr/share/common-licenses/GPL-2.
+
+Files: qterm/overlayWidget.h qterm/popupMessage.cpp qterm/progressBar.h
+ qterm/popupMessage.h qterm/progressBar.cpp qterm/overlayWidget.cpp
+Copyright:
+  2005 Max Howell <max.howell@methylblue.com>
+License: GPL-2+  
+  On Debian systems, the complete text of the GNU General Public License
+  may be found in /usr/share/common-licenses/GPL-2.
+
+Files: qterm/osdmessage.h qterm/osdmessage.cpp
+Copyright:
+  2004 by Enrico Ros <eros.kde@email.it>
+License: GPL-2+  
+  On Debian systems, the complete text of the GNU General Public License
+  may be found in /usr/share/common-licenses/GPL-2.
+
+Files: qterm/trayicon_x11.cpp qterm/trayicon_win.cpp
+Copyright:
+  2003 Justin Karneges
+License: LGPL-2.1+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+  On Debian systems, the complete text of the GNU General Public License
+  may be found in /usr/share/common-licenses/LGPL-2.1
+
+Files: qterm/ssh/crc32.h qterm/ssh/crc32.cpp
+Copyright:
+  2003 Markus Friedl
+License: BSD-2
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+  1. Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+ 
+  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+  NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Files: qterm/ssh/getput.h
+Copyright: 
+  1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
+License:
+  As far as I am concerned, the code I have written for this software
+  can be used freely for any purpose.  Any derived versions of this
+  software must be clearly marked as such, and if the derived work is
+  incompatible with the protocol description in the RFC file, it must be
+  called by a name other than "ssh" or "Secure Shell".
