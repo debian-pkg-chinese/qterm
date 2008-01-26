@@ -3,6 +3,7 @@ qterm (1:0.4.1-1) unstable; urgency=low
   * new upstream release
     - deleted: debian/patches/04_make-isIllChar-more-strict.dpatch
     - deleted: debian/patches/05_distinguish-URL-spans-over-many-rows.dpatch
+    - debian/rules: remove the common-install-impl part.
   * debian/watch: updated.
   * debian/patches/00list: updated.
   * debian/control: bump standards version to 3.7.3, no changing needed.

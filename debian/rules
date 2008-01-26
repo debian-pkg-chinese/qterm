@@ -3,11 +3,8 @@
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/autotools.mk
 include /usr/share/cdbs/1/rules/dpatch.mk
-DEB_CONFIGURE_EXTRA_FLAGS := --enable-arts --enable-esd
 
-common-install-impl::
-	lrelease qterm/po/qterm_chs.ts -qm $(CURDIR)/debian/qterm/usr/share/qterm/po/qterm_chs.qm
-	lrelease qterm/po/qterm_cht.ts -qm $(CURDIR)/debian/qterm/usr/share/qterm/po/qterm_cht.qm
+DEB_CONFIGURE_EXTRA_FLAGS := --enable-arts --enable-esd
 
 cleanbuilddir/qterm::
 	rm -f subdirs
