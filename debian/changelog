@@ -8,8 +8,9 @@ qterm (1:0.4.1-1) unstable; urgency=low
   * debian/patches/00list: updated.
   * debian/control: bump standards version to 3.7.3, no changing needed.
   * debian/copyright: clear license issue.
+  * debian/qterm.1: clear confused part, Thanks Bas Wijnen.
 
- -- LI Daobing <lidaobing@gmail.com>  Sat, 26 Jan 2008 13:04:56 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Fri, 01 Feb 2008 21:58:20 +0800
 
 qterm (1:0.4.0-6) unstable; urgency=low
 
