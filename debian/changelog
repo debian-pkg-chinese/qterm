@@ -12,7 +12,7 @@ qterm (1:0.4.1-1) unstable; urgency=low
   * debian/control: bump compat level from 5 to 6.
   * debian/compat: ditto.
 
- -- LI Daobing <lidaobing@gmail.com>  Mon, 04 Feb 2008 21:32:55 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Fri, 08 Feb 2008 23:30:33 +0800
 
 qterm (1:0.4.0-6) unstable; urgency=low
 

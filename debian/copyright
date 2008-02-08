@@ -10,8 +10,8 @@ Copyright:
   2005 Alexander Schmehl <tolimar@debian.org>
   2005-2008 LI Daobing <lidaobing@gmail.com>
 License: GPL-2+
- On Debian systems, the complete text of the GNU General Public License
- can be found in file "/usr/share/common-licenses/GPL-2".
+ On Debian systems, the complete text of version 2 of the GNU General
+ Public License can be found in file "/usr/share/common-licenses/GPL-2".
 
 Files: *
 Copyright:
@@ -34,30 +34,30 @@ License: GPL-2+
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-  On Debian systems, the complete text of the GNU General Public License
-  may be found in /usr/share/common-licenses/GPL-2.
+  On Debian systems, the complete text of version 2 of the GNU General
+  Public License may be found in /usr/share/common-licenses/GPL-2.
 
 Files: qterm/trayicon.h qterm/trayicon.cpp
 Copyright:
   2001, 2002 Justin Karneges
 License: GPL-2+
-  On Debian systems, the complete text of the GNU General Public License
-  may be found in /usr/share/common-licenses/GPL-2.
+  On Debian systems, the complete text of version 2 of the GNU General
+  Public License may be found in /usr/share/common-licenses/GPL-2.
 
 Files: qterm/overlayWidget.h qterm/popupMessage.cpp qterm/progressBar.h
  qterm/popupMessage.h qterm/progressBar.cpp qterm/overlayWidget.cpp
 Copyright:
   2005 Max Howell <max.howell@methylblue.com>
 License: GPL-2+  
-  On Debian systems, the complete text of the GNU General Public License
-  may be found in /usr/share/common-licenses/GPL-2.
+  On Debian systems, the complete text of version 2 the GNU General
+  Public License may be found in /usr/share/common-licenses/GPL-2.
 
 Files: qterm/osdmessage.h qterm/osdmessage.cpp
 Copyright:
   2004 by Enrico Ros <eros.kde@email.it>
 License: GPL-2+  
-  On Debian systems, the complete text of the GNU General Public License
-  may be found in /usr/share/common-licenses/GPL-2.
+  On Debian systems, the complete text of version 2 of the GNU General
+  Public License may be found in /usr/share/common-licenses/GPL-2.
 
 Files: qterm/trayicon_x11.cpp qterm/trayicon_win.cpp
 Copyright:
@@ -77,8 +77,9 @@ License: LGPL-2.1+
     License along with this library; if not, write to the Free Software
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-  On Debian systems, the complete text of the GNU General Public License
-  may be found in /usr/share/common-licenses/LGPL-2.1
+  On Debian systems, the complete text of version 2.1 of the GNU Lesser
+  General Public License may be found in
+  /usr/share/common-licenses/LGPL-2.1.
 
 Files: qterm/ssh/crc32.h qterm/ssh/crc32.cpp
 Copyright:
@@ -103,3 +104,11 @@ License: BSD-2
   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
   THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+GPL-2+ can also be treated as version 3 of GNU General Public License.
+On Debian systems, the complete text may be found in
+/usr/share/common-licenses/GPL-3.
+
+LGPL-2.1+ can also be treated as version 3 of GNU Lesser General Public
+License. On Debian systems, the complete text may be found in
+/usr/share/common-licenses/LGPL-3.
