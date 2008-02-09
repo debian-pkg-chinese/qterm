@@ -11,8 +11,9 @@ qterm (1:0.4.1-1) unstable; urgency=low
   * debian/qterm.1: clear confused part, Thanks Bas Wijnen.
   * debian/control: bump compat level from 5 to 6.
   * debian/compat: ditto.
+  * Don't build depends on ancient libqt3-compat-headers (Closes: #464807)
 
- -- LI Daobing <lidaobing@gmail.com>  Fri, 08 Feb 2008 23:30:33 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Sat, 09 Feb 2008 11:45:16 +0800
 
 qterm (1:0.4.0-6) unstable; urgency=low
 

@@ -4,8 +4,8 @@ Priority: optional
 Maintainer: LI Daobing <lidaobing@gmail.com>
 Uploaders: Yu Guanghui <ygh@debian.org>
 Build-Depends: cdbs (>= 0.4.23-1.1), autotools-dev, debhelper(>= 6),
- libqt3-mt-dev, libqt3-compat-headers, xutils, python-dev,
- libssl-dev (>= 0.9.8a-4), libesd0-dev, libarts1-dev, dpatch
+ libqt3-mt-dev, xutils, python-dev, libssl-dev (>= 0.9.8a-4),
+ libesd0-dev, libarts1-dev, dpatch
 Standards-Version: 3.7.3
 XS-Python-Version: current
 Vcs-Browser: http://pkg-newedit.googlecode.com/svn/unstable/qterm
