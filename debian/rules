@@ -1,12 +1,5 @@
 #!/usr/bin/make -f
 
 include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/autotools.mk
 include /usr/share/cdbs/1/rules/dpatch.mk
-
-DEB_CONFIGURE_EXTRA_FLAGS := --enable-arts --enable-esd
-
-cleanbuilddir/qterm::
-	rm -f subdirs
-
-unpatch: deapply-dpatches
+include /usr/share/cdbs/1/class/cmake.mk
