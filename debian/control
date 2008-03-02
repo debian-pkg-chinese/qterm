@@ -3,7 +3,7 @@ Section: x11
 Priority: optional
 Maintainer: LI Daobing <lidaobing@gmail.com>
 Uploaders: Yu Guanghui <ygh@debian.org>
-Build-Depends: cdbs (>= 0.4.23-1.1), debhelper (>= 6), dpatch, 
+Build-Depends: cdbs (>= 0.4.51), debhelper (>= 6),
  cmake (>= 2.4.2), libqt4-dev, libssl-dev
 Standards-Version: 3.7.3
 XS-Python-Version: current
