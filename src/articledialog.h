@@ -2,7 +2,7 @@
 ** Form interface generated from reading ui file 'articledialog.ui'
 **
 ** Created: Sun Jan 5 19:46:28 2003
-**      by: The User Interface Compiler ($Id: articledialog.h 441 2008-02-09 16:14:44Z hephooey $)
+**      by: The User Interface Compiler ($Id$)
 **
 ** WARNING! All changes made in this file will be lost!
 ****************************************************************************/

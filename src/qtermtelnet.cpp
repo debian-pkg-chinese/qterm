@@ -12,8 +12,8 @@ AUTHOR:		smartfish kafa
 #include "qterm.h"
 #include <stdio.h>
 #include "qtermsocket.h"
-#ifndef _NO_SSH_COMPILED
-#include "ssh/qtermsshsocket.h"
+#ifdef SSH_ENABLED
+#include "ssh/socket.h"
 #endif
 // #include <q3cstring.h>
 
@@ -78,7 +78,7 @@ struct fsm_trans Telnet::substab[] = {
  * Constructor
  *------------------------------------------------------------------------
  */
-Telnet::Telnet( const QString & strTermType, int rows, int columns, bool isSSH, const char * sshuser, const char * sshpasswd )
+Telnet::Telnet( const QString & strTermType, int rows, int columns, bool isSSH )
 	:from_socket(),to_ansi(),from_ansi(),to_socket()
 {
 	term = new char[21];
@@ -102,9 +102,9 @@ Telnet::Telnet( const QString & strTermType, int rows, int columns, bool isSSH, 
 
 	// create socket
 	d_isSSH = isSSH;
-#ifndef _NO_SSH_COMPILED
+#ifdef SSH_ENABLED
 	if (d_isSSH)
-		socket = new SSHSocket(sshuser, sshpasswd);
+		socket = new SSHSocket();
 	else
 #endif
 		socket = new TelnetSocket();
