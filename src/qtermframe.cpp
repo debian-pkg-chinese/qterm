@@ -14,6 +14,7 @@ AUTHOR:        kingson fiasco
 #include "qtermwndmgr.h"
 #include "qtermtimelabel.h"
 #include "qtermconfig.h"
+#include "qtermglobal.h"
 #include "qterm.h"
 #include "qtermparam.h"
 #include "qtermtoolbutton.h"
@@ -75,17 +76,6 @@ AUTHOR:        kingson fiasco
 
 namespace QTerm
 {
-extern QString fileCfg;
-extern QString addrCfg;
-
-extern QString pathLib;
-extern QString pathPic;
-extern QString pathCfg;
-
-extern void clearDir(const QString& );
-extern QStringList loadNameList(Config *);
-extern bool loadAddress(Config *, int, Param &);
-extern void saveAddress(Config *, int, const Param &);
 
 Frame* Frame::s_instance = 0;
 
@@ -158,7 +148,7 @@ Frame::~Frame()
 //initialize setting from qterm.cfg
 void Frame::iniSetting()
 {
-	Config * conf= new Config(fileCfg);
+	Config * conf= Global::instance()->fileCfg();
 
 	QString strTmp;
 	
@@ -256,8 +246,6 @@ void Frame::iniSetting()
 	loadPref( conf );
 
 	setUseDock(m_pref.bTray);
-
-	delete conf;
 }
 
 void Frame::loadPref( Config * conf )
@@ -267,14 +255,10 @@ void Frame::loadPref( Config * conf )
 	m_pref.nXIM = strTmp.toInt();
 	strTmp = conf->getItemValue("preference","wordwrap");
 	m_pref.nWordWrap = strTmp.toInt();
-	strTmp = conf->getItemValue("preference","smartww");
-	m_pref.bSmartWW=(strTmp!="0");
 	strTmp = conf->getItemValue("preference","wheel");
 	m_pref.bWheel=(strTmp!="0");
 	strTmp = conf->getItemValue("preference","url");
 	m_pref.bUrl=(strTmp!="0");
-	strTmp = conf->getItemValue("preference","logmsg");
-	m_pref.bLogMsg=(strTmp!="0");
 	strTmp = conf->getItemValue("preference","blinktab");
 	m_pref.bBlinkTab=(strTmp!="0");
 	strTmp = conf->getItemValue("preference","warn");
@@ -288,19 +272,17 @@ void Frame::loadPref( Config * conf )
 	m_pref.bAA=(strTmp!="0");
 	strTmp = conf->getItemValue("preference","tray");
 	m_pref.bTray=(strTmp!="0");
-	strTmp = conf->getItemValue("preference","playmethod");
-	m_pref.nMethod=strTmp.toInt();
 	strTmp = conf->getItemValue("preference","externalplayer");
 	m_pref.strPlayer=strTmp;
 
 	strTmp = conf->getItemValue("preference","clearpool");
 	m_pref.bClearPool=(strTmp!="0");
 	strTmp = conf->getItemValue("preference","pool");
-	m_pref.strPoolPath=strTmp.isEmpty()?pathCfg+"pool/":strTmp;
+	m_pref.strPoolPath=strTmp.isEmpty()?Global::instance()->pathCfg()+"pool/":strTmp;
 	if( m_pref.strPoolPath.right(1) != "/" )
 		m_pref.strPoolPath.append('/');
 	strTmp = conf->getItemValue("preference","zmodem");
-	m_pref.strZmPath=strTmp.isEmpty()?pathCfg+"zmodem/":strTmp;
+	m_pref.strZmPath=strTmp.isEmpty()?Global::instance()->pathCfg()+"zmodem/":strTmp;
 	if( m_pref.strZmPath.right(1) != "/" )
 		m_pref.strZmPath.append('/');
 	strTmp = conf->getItemValue("preference","image");
@@ -310,11 +292,11 @@ void Frame::loadPref( Config * conf )
 //save current setting to qterm.cfg
 void Frame::saveSetting()
 {
-	Config * conf= new Config(fileCfg);
+	Config * conf= Global::instance()->fileCfg();
 
 	QString strTmp;
 	//save font
-	conf->setItemValue("global","font",qApp->font().family().toLocal8Bit());
+	conf->setItemValue("global","font",qApp->font().family());
 	strTmp.setNum(QFontInfo(qApp->font()).pointSize());
 	conf->setItemValue("global","pointsize",strTmp);
 	strTmp.setNum(QFontInfo(qApp->font()).pixelSize());
@@ -368,8 +350,7 @@ void Frame::saveSetting()
 	conf->setItemValue("global","statusbar", m_bStatusBar?"1":"0");
 	conf->setItemValue("global","switchbar", m_bSwitchBar?"1":"0");
 
-	conf->save(fileCfg);
-	delete conf;
+	conf->save();
 }
 
 //addressbook
@@ -386,10 +367,8 @@ void Frame::addressBook()
 void Frame::quickLogin()
 {
 	quickDialog quick(this);
-	
-	Config *pConf = new Config(addrCfg);
-	loadAddress(pConf, -1, quick.param);
-	delete pConf;
+
+	Global::instance()->loadAddress(-1, quick.param);
 
 	if(quick.exec()==1)
 	{
@@ -412,9 +391,9 @@ void Frame::exitQTerm()
 	// clear zmodem and pool if needed
 	if(m_pref.bClearPool)
 	{
-		clearDir(m_pref.strZmPath);
-		clearDir(m_pref.strPoolPath);
-		clearDir(m_pref.strPoolPath+"shadow-cache/");
+		Global::instance()->clearDir(m_pref.strZmPath);
+		Global::instance()->clearDir(m_pref.strPoolPath);
+		Global::instance()->clearDir(m_pref.strPoolPath+"shadow-cache/");
 	}
 
 	setUseDock(false);
@@ -427,6 +406,7 @@ void Frame::newWindow( const Param&  param, int index )
 {
 	Window * window=new Window( this, param, index, m_MdiArea,
 					0 );
+	QString pathLib = Global::instance()->pathLib();
 	m_MdiArea->addSubWindow(window);
 	window->setWindowTitle( param.m_strName );
 	window->setWindowIcon( QPixmap(pathLib+"pic/tabpad.png") );
@@ -526,8 +506,7 @@ void Frame::popupConnectMenu()
 	connectMenu->addAction("Quick Login", this, SLOT(quickLogin()) );
 	connectMenu->addSeparator();
 	
-	Config conf(addrCfg);
-	QStringList listName = loadNameList( &conf );
+	QStringList listName = Global::instance()->loadNameList();
 	QSignalMapper * connectMapper = new QSignalMapper(this);
 
 	for ( int i=0; i<listName.count(); i++ )
@@ -550,12 +529,10 @@ void Frame::connectMenuAboutToHide()
 }
 void Frame::connectMenuActivated(int id)
 {
-	Config *pConf = new Config(addrCfg);
 	Param param;
 	// FIXME: don't know the relation with id and param setted by setItemParameter
-	if(loadAddress(pConf, id, param))
+	if(Global::instance()->loadAddress(id, param))
 		newWindow(param, id);
-	delete pConf;
 }
 
 void Frame::switchWin(int id)
@@ -637,10 +614,9 @@ void Frame::closeEvent(QCloseEvent * clse)
         // clear zmodem and pool if needed
         if(m_pref.bClearPool)
         {
-                clearDir(m_pref.strZmPath);
-                clearDir(m_pref.strPoolPath);
-		clearDir(m_pref.strPoolPath+"shadow-cache/");
-
+			Global::instance()->clearDir(m_pref.strZmPath);
+			Global::instance()->clearDir(m_pref.strPoolPath);
+			Global::instance()->clearDir(m_pref.strPoolPath+"shadow-cache/");
         }
 
         setUseDock(false);
@@ -653,10 +629,9 @@ void Frame::updateLang(QAction * action)
 {
 	QMessageBox::information( this, "QTerm",
 			tr("This will take effect after restart,\nplease close all windows and restart."));
-	Config * conf= new Config(fileCfg);
+	Config * conf= Global::instance()->fileCfg();
 	conf->setItemValue("global","language",action->objectName());
-	conf->save(fileCfg);
-	delete conf;
+	conf->save();
 }
 
 void Frame::connectIt()
@@ -664,9 +639,7 @@ void Frame::connectIt()
 	if( wndmgr->activeWindow()== NULL )
 	{
 		Param param;
-		Config *pConf = new Config(addrCfg);
-		loadAddress(pConf, -1, param);
-		delete pConf;
+		Global::instance()->loadAddress(-1, param);
 		newWindow( param );
 	}
 	else
@@ -775,6 +748,7 @@ void Frame::fullscreen()
 	
 	if( m_bFullScreen )
 	{
+		//TODO: add an item to the popup menu so we can go back to normal without touch the keyboard
 		menuBar()->hide();
 		mdiTools->hide();
 		mdiconnectTools->hide();
@@ -795,7 +769,7 @@ void Frame::fullscreen()
 		showNormal();
 	}
 
-	m_fullAction->setEnabled(m_bFullScreen);
+	m_fullAction->setChecked(m_bFullScreen);
 // 	menuBar()->setItemChecked( ID_VIEW_FULL, m_bFullScreen );
 
 }
@@ -866,21 +840,17 @@ void Frame::setting( )
 void Frame::defaultSetting()
 {
 	addrDialog set(this, true);
-	
-	Config *pConf = new Config(addrCfg);
 
-	if( pConf->hasSection("default") )
-		loadAddress(pConf,-1,set.param);
+	if( Global::instance()->addrCfg()->hasSection("default") )
+		Global::instance()->loadAddress(-1,set.param);
 
 	set.updateData(false);
 
 	if(set.exec()==1)
 	{
-		saveAddress(pConf,-1,set.param);
-		pConf->save(addrCfg);
+		Global::instance()->saveAddress(-1,set.param);
+		Global::instance()->addrCfg()->save();
 	}
-	
-	delete pConf;
 }
 
 void Frame::preference()
@@ -889,9 +859,8 @@ void Frame::preference()
 
 	if(pref.exec()==1)
 	{
-		Config *pConf = new Config(fileCfg);
+		Config * pConf= Global::instance()->fileCfg();
 		loadPref(pConf);
-		delete pConf;
 		setUseDock(m_pref.bTray);
 	}
 }
@@ -929,7 +898,7 @@ void Frame::updateMouse(bool isEnabled)
 
 void Frame::viewImages()
 {
-	Image viewer(pathPic+"pic/shadow.png", m_pref.strPoolPath, this);
+	Image viewer(Global::instance()->pathPic()+"pic/shadow.png", m_pref.strPoolPath, this);
 	viewer.exec();
 }
 
@@ -958,11 +927,11 @@ void Frame::keyClicked(int id)
 	if(wndmgr->activeWindow()==NULL)
 		return;
 
-	Config conf(fileCfg);
+	Config * conf= Global::instance()->fileCfg();
 
 	QString strItem = QString("key%1").arg(id);
 // 	strItem.sprintf("key%d",id);
-	QString strTmp = conf.getItemValue("key", strItem);
+	QString strTmp = conf->getItemValue("key", strItem);
 
 	if(strTmp[0]=='0')	// key
 	{
@@ -979,7 +948,7 @@ void Frame::keyClicked(int id)
 
 void Frame::toolBarPosChanged(QToolBar*)
 {
-	Config conf(fileCfg);
+	Config * conf= Global::instance()->fileCfg();
 	
 // 	Qt::ToolBarDock dock;
 	int index;
@@ -1002,17 +971,17 @@ void Frame::toolBarPosChanged(QToolBar*)
 // 		conf.setItemValue("global","bbsbar", valueToString(mdiconnectTools->isVisible(), (int)dock, index, nl, extra));
 	}
 
-	conf.save(fileCfg);
+	conf->save();
 }
 
 void Frame::addMainTool()
 {
 	mdiTools = addToolBar( "Main ToolBar" );
 
-	Config conf(fileCfg);
+	Config * conf= Global::instance()->fileCfg();
 	int hide,dock,index,nl,extra;
 
-	QString strTmp = conf.getItemValue("global","mainbar");
+	QString strTmp = conf->getItemValue("global","mainbar");
 	if(!strTmp.isEmpty())
 	{
 		sscanf(strTmp.toLatin1(),"%d %d %d %d %d",&hide,&dock,&index,&nl,&extra);
@@ -1020,7 +989,7 @@ void Frame::addMainTool()
 			mdiTools->hide();
 	}
 	connectButton = new QToolButton( mdiTools );
-	connectButton->setIcon(QPixmap(pathPic+"pic/connect.png"));
+	connectButton->setIcon(QPixmap(Global::instance()->pathPic()+"pic/connect.png"));
 
  	mdiTools->addWidget(connectButton);
 	connectMenu = new QMenu(this);
@@ -1032,7 +1001,7 @@ void Frame::addMainTool()
 	mdiTools->addAction( m_quickConnectAction );
 	// custom define
 	key = addToolBar("Custom Key");
-	strTmp = conf.getItemValue("global","keybar");
+	strTmp = conf->getItemValue("global","keybar");
 	if(!strTmp.isEmpty())
 	{
 		sscanf(strTmp.toLatin1(),"%d %d %d %d %d",&hide,&dock,&index,&nl,&extra);
@@ -1042,7 +1011,7 @@ void Frame::addMainTool()
 
 	// the toolbar 
 	mdiconnectTools = addToolBar( "bbs operations" );
-	strTmp = conf.getItemValue("global","bbbar");
+	strTmp = conf->getItemValue("global","bbbar");
 	if(!strTmp.isEmpty())
 	{
 		sscanf(strTmp.toLatin1(),"%d %d %d %d %d",&hide,&dock,&index,&nl,&extra);
@@ -1108,6 +1077,7 @@ void Frame::initShortcuts()
 
 void Frame::initActions()
 {
+	QString pathLib = Global::instance()->pathLib();
 	m_connectAction = new QAction(QPixmap(pathLib+"pic/connect.png"), tr("&Connect"),this);
 	m_disconnectAction = new QAction(QPixmap(pathLib+"pic/disconnect.png"), tr("&Disconnect"), this);
 	m_addressAction = new QAction(QPixmap(pathLib+"pic/addr.png"), tr("&Address book"), this);
@@ -1179,6 +1149,7 @@ void Frame::initActions()
 	m_uiFontAction = new QAction(tr("&UI font"), this);
 	m_fullAction = new QAction(tr("&Fullscreen"), this);
 	m_fullAction->setShortcut(Qt::Key_F6);
+	addAction(m_fullAction);
 	m_bossAction = new QAction(tr("Boss &Color"), this);
 	m_bossAction->setShortcut(Qt::Key_F12);
 
@@ -1228,7 +1199,7 @@ void Frame::initActions()
 	m_aboutAction->setShortcut(Qt::Key_F1);
 	m_homepageAction = new QAction(tr("QTerm's &Homepage"),this);
 
-	m_reconnectAction = new QAction(QPixmap(pathPic+"pic/reconnect.png"),tr("Reconnect When Disconnected By Host"), this);
+	m_reconnectAction = new QAction(QPixmap(Global::instance()->pathPic()+"pic/reconnect.png"),tr("Reconnect When Disconnected By Host"), this);
 	m_reconnectAction->setCheckable(true);
 
 	connect(m_connectAction, SIGNAL(triggered()), this, SLOT(connectIt()));
@@ -1511,9 +1482,9 @@ void Frame::enableMenuToolBar( bool enable )
 void Frame::updateKeyToolBar()
 {
 	key->clear();
-	key->addAction( QPixmap(pathPic+"pic/keys.png"), tr("Key Setup"), this, SLOT(keySetup()) );
+	key->addAction( QPixmap(Global::instance()->pathPic()+"pic/keys.png"), tr("Key Setup"), this, SLOT(keySetup()) );
 
-	Config * conf= new Config(fileCfg);
+	Config * conf = Global::instance()->fileCfg();
 	QString strItem, strTmp;
 	strTmp = conf->getItemValue("key", "num");
 	int num = strTmp.toInt();
@@ -1533,8 +1504,6 @@ void Frame::updateKeyToolBar()
 		connect(button, SIGNAL(buttonClicked(int)), this, SLOT(keyClicked(int)));
 		key->addWidget(button);
 	}
-
-	delete conf;
 }
 
 QString Frame::valueToString(bool shown, int dock, int index, bool nl, int extra )
@@ -1591,11 +1560,10 @@ void Frame::setUseDock(bool use)
 
 	
 	tray = new QSystemTrayIcon( this ); //pathLib+"pic/qterm_tray.png", "QTerm", trayMenu, this);
-	tray->setIcon(QPixmap(pathPic+"pic/qterm_tray.png"));
+	tray->setIcon(QPixmap(Global::instance()->pathPic()+"pic/qterm_tray.png"));
 	tray->setContextMenu(trayMenu);
-	connect(tray, SIGNAL(activated(int)), SLOT(trayActived(int)));
-// 	connect(tray, SIGNAL(clicked(const QPoint &, int)), SLOT(trayClicked(const QPoint &, int)));
-// 	connect(tray, SIGNAL(doubleClicked(const QPoint &)), SLOT(trayDoubleClicked()));
+	connect(tray, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
+			this, SLOT(trayActivated(QSystemTrayIcon::ActivationReason)));
 // 	connect(tray, SIGNAL(closed()), this, SLOT(exitQTerm()));
 
 	tray->show();
@@ -1615,14 +1583,23 @@ void Frame::buildTrayMenu()
 	trayMenu->addAction(tr("About"), this, SLOT(aboutQTerm()));
 	trayMenu->addAction(tr("Exit"), this, SLOT(exitQTerm()));
 }
-void Frame::trayActived(int reason)
+
+void Frame::trayActivated(QSystemTrayIcon::ActivationReason reason)
 {
-	if (reason == QSystemTrayIcon::Context)
+	switch (reason) {
+	case QSystemTrayIcon::Trigger:
+	case QSystemTrayIcon::DoubleClick:
+		if (isHidden()) {
+			trayShow();
+		} else {
+			trayHide();
+		}
+		break;
+	case QSystemTrayIcon::Context:
 		return;
-	if(!isVisible())
-		trayShow();
-	else
-		trayHide();
+	default:
+		return;
+	}
 }
 /*
 void Frame::trayClicked(const QPoint &, int)

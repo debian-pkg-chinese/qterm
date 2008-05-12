@@ -10,6 +10,7 @@
 #include "prefdialog.h"
 #include "soundconf.h"
 #include "qtermconfig.h"
+#include "qtermglobal.h"
 
 //Added by qt3to4:
 #include <QCloseEvent>
@@ -17,8 +18,6 @@
 #include <QFileDialog>
 namespace QTerm
 {
-extern QString fileCfg;
-extern QString pathCfg;
 //extern QString getOpenFileName(const QString&, QWidget*);
 
 /* 
@@ -29,16 +28,13 @@ extern QString pathCfg;
  *  TRUE to construct a modal dialog.
  */
 prefDialog::prefDialog( QWidget* parent, Qt::WFlags fl )
-	: QDialog( parent, fl ),bgSound(this)
+	: QDialog( parent, fl )
 {
-	ui.setupUi(this);
-	bgSound.addButton(ui.noneRadioButton, 0);
-	bgSound.addButton(ui.beepRadioButton, 1);
-	bgSound.addButton(ui.fileRadioButton, 2);
 
+	ui.setupUi(this);
 	connectSlots();
-	
 	loadSetting();
+
 }
 
 /*  
@@ -54,140 +50,120 @@ void prefDialog::connectSlots()
 	connect(ui.okPushButton, SIGNAL(clicked()), this, SLOT(onOK()) );
 	connect(ui.cancelPushButton, SIGNAL(clicked()), this, SLOT(onCancel()) );
 	connect(ui.selectsoundPushButton, SIGNAL(clicked()), this, SLOT(onSound()) );
+	connect(ui.selectPlayerPushButton, SIGNAL(clicked()), this, SLOT(onPlayer()) );
 	connect(ui.choosehttpPushButton, SIGNAL(clicked()), this, SLOT(onHttp()) );
-    //connect(ButtonGroup1 , SIGNAL(clicked(int)), this, SLOT(onBeep(int)) );
 	connect(ui.browsePushButton, SIGNAL(clicked()), this, SLOT(onBrowse()) );
 	connect(ui.imagePushButton, SIGNAL(clicked()), this, SLOT(onImage()) );
 	connect(ui.poolPushButton, SIGNAL(clicked()), this, SLOT(onPool()) );
+	connect(ui.resetPushButton, SIGNAL(clicked()), this, SLOT(onReset()) );
 }
 
 void prefDialog::loadSetting()
 {
-	Config conf(fileCfg);
-	
+	Config * conf = Global::instance()->fileCfg();
+
 	QString strTmp;
-	
-	strTmp = conf.getItemValue("preference","xim");
+
+	strTmp = conf->getItemValue("preference","xim");
 	ui.ximComboBox->setCurrentIndex(strTmp.toInt());
-	
-	strTmp = conf.getItemValue("preference","wordwrap");
-	ui.wordLineEdit3->setText(strTmp);
-	
-	strTmp = conf.getItemValue("preference","smartww");
-	ui.smartCheckBox->setChecked(strTmp!="0");
-	
-	strTmp = conf.getItemValue("preference","wheel");
+
+	strTmp = conf->getItemValue("preference","wordwrap");
+	ui.wordSpinBox->setValue(strTmp.toInt());
+
+	strTmp = conf->getItemValue("preference","wheel");
 	ui.wheelCheckBox->setChecked(strTmp!="0");
-	
-	strTmp = conf.getItemValue("preference","url");
+
+	strTmp = conf->getItemValue("preference","url");
 	ui.urlCheckBox->setChecked(strTmp!="0");
-	
-	strTmp = conf.getItemValue("preference","logmsg");
-	ui.saveCheckBox->setChecked(strTmp!="0");
-	
-	strTmp = conf.getItemValue("preference","blinktab");
+
+	strTmp = conf->getItemValue("preference","blinktab");
 	ui.blinkCheckBox->setChecked(strTmp!="0");
-	
-	strTmp = conf.getItemValue("preference","warn");
+
+	strTmp = conf->getItemValue("preference","warn");
 	ui.warnCheckBox->setChecked(strTmp!="0");
-	
-	strTmp = conf.getItemValue("preference","beep");
-	qobject_cast<QRadioButton*>(bgSound.button(strTmp.toInt()))->setChecked(true);
-	//ButtonGroup1->find(strTmp.toInt()))->setChecked(true);
-	
-// 	if(strTmp.toInt()!=2)
-// 	{
-// 		wavefileLineEdit->setEnabled(false);
-// 		selectsoundPushButton->setEnabled(false);
-// 	}
-	
-	strTmp = conf.getItemValue("preference","wavefile");
+
+	strTmp = conf->getItemValue("preference","wavefile");
 	ui.wavefileLineEdit->setText( strTmp );
-	
-	strTmp = conf.getItemValue("preference","antialias");
+
+	strTmp = conf->getItemValue("preference","externalplayer");
+	ui.playerLineEdit->setText( strTmp );
+
+	strTmp = conf->getItemValue("preference","antialias");
 	ui.aacheckBox->setChecked( strTmp!="0" );
-	
-	strTmp = conf.getItemValue("preference","tray");
+
+	strTmp = conf->getItemValue("preference","tray");
 	ui.trayCheckBox->setChecked( strTmp!="0" );
-	
-	strTmp = conf.getItemValue("preference","clearpool");
+
+	strTmp = conf->getItemValue("preference","clearpool");
 	ui.clearCheckBox->setChecked( strTmp!="0" );
-	
-	strTmp = conf.getItemValue("preference","pool");
+
+	strTmp = conf->getItemValue("preference","pool");
 	if(strTmp.isEmpty())
-		strTmp = pathCfg+"pool/";
+		strTmp = Global::instance()->pathCfg()+"pool/";
 	ui.poolLineEdit->setText( strTmp );
-	
-	strTmp = conf.getItemValue("preference","http");
+
+	strTmp = conf->getItemValue("preference","http");
 	ui.httpLineEdit->setText( strTmp );
-	
-	strTmp = conf.getItemValue("preference","zmodem");
+
+	strTmp = conf->getItemValue("preference","zmodem");
 	if(strTmp.isEmpty())
-		strTmp = pathCfg+"zmodem/";
+		strTmp = Global::instance()->pathCfg()+"zmodem/";
 	ui.zmodemLineEdit->setText( strTmp );
-	
-	strTmp = conf.getItemValue("preference","image");
+
+	strTmp = conf->getItemValue("preference","image");
 	ui.imageLineEdit->setText( strTmp );
 }
+
 void prefDialog::saveSetting()
 {
-	Config conf(fileCfg);
+	Config * conf = Global::instance()->fileCfg();
 
 	QString strTmp;
 
 	strTmp.setNum(ui.ximComboBox->currentIndex());
-    conf.setItemValue("preference","xim", strTmp);
-	
+	conf->setItemValue("preference","xim", strTmp);
 
-	conf.setItemValue("preference","wordwrap", ui.wordLineEdit3->text());
-	
-	strTmp.setNum(ui.smartCheckBox->isChecked()?1:0);
-	conf.setItemValue("preference","smartww", strTmp);
-	
+	strTmp.setNum(ui.wordSpinBox->value());
+	conf->setItemValue("preference","wordwrap", strTmp);
+
 	strTmp.setNum(ui.wheelCheckBox->isChecked()?1:0);
-	conf.setItemValue("preference","wheel", strTmp);
+	conf->setItemValue("preference","wheel", strTmp);
 
 	strTmp.setNum(ui.urlCheckBox->isChecked()?1:0);
-    conf.setItemValue("preference","url", strTmp);
-  
-	strTmp.setNum(ui.saveCheckBox->isChecked()?1:0);
-	conf.setItemValue("preference","logmsg", strTmp);
- 
+	conf->setItemValue("preference","url", strTmp);
+
 	strTmp.setNum(ui.blinkCheckBox->isChecked()?1:0);
-    conf.setItemValue("preference","blinktab", strTmp);
+	conf->setItemValue("preference","blinktab", strTmp);
 
 	strTmp.setNum(ui.warnCheckBox->isChecked()?1:0);
-    conf.setItemValue("preference","warn", strTmp);
+	conf->setItemValue("preference","warn", strTmp);
 
 	strTmp.setNum(ui.aacheckBox->isChecked()?1:0);
-    conf.setItemValue("preference","antialias", strTmp);
+	conf->setItemValue("preference","antialias", strTmp);
 
 	strTmp.setNum(ui.trayCheckBox->isChecked()?1:0);
-    conf.setItemValue("preference","tray", strTmp);
-   
-	strTmp.setNum(bgSound.checkedId());
-    conf.setItemValue("preference","beep", strTmp);
-	
-	if(strTmp=="2")
-		conf.setItemValue("preference","wavefile", ui.wavefileLineEdit->text());
-	
+	conf->setItemValue("preference","tray", strTmp);
+
+	conf->setItemValue("preference","wavefile", ui.wavefileLineEdit->text());
+	conf->setItemValue("preference","externalplayer", ui.playerLineEdit->text());
+
 	strTmp.setNum(ui.clearCheckBox->isChecked()?1:0);
-    conf.setItemValue("preference","clearpool", strTmp);
+	conf->setItemValue("preference","clearpool", strTmp);
 
 	strTmp=ui.poolLineEdit->text();
 	if(strTmp.isEmpty())
-		strTmp = pathCfg+"pool/";
-	conf.setItemValue("preference","pool",strTmp.toLocal8Bit());
+		strTmp = Global::instance()->pathCfg()+"pool/";
+	conf->setItemValue("preference","pool",strTmp);
 
 	strTmp=ui.zmodemLineEdit->text();
 	if(strTmp.isEmpty())
-		strTmp = pathCfg+"zmodem/";
-	conf.setItemValue("preference","zmodem",strTmp.toLocal8Bit());
-	
-	conf.setItemValue("preference","http",ui.httpLineEdit->text());
-	conf.setItemValue("preference","image",ui.imageLineEdit->text().toLocal8Bit());
-	
-	conf.save(fileCfg);
+		strTmp = Global::instance()->pathCfg()+"zmodem/";
+	conf->setItemValue("preference","zmodem",strTmp);
+
+	conf->setItemValue("preference","http",ui.httpLineEdit->text());
+	conf->setItemValue("preference","image",ui.imageLineEdit->text());
+
+	conf->save();
 }
 
 void prefDialog::closeEvent(QCloseEvent *)
@@ -200,42 +176,44 @@ void prefDialog::onOK()
 	saveSetting();
 	done(1);
 }
+
 void prefDialog::onCancel()
 {
 	done(0);
 }
+
+void prefDialog::onReset()
+{
+	loadSetting();
+}
+
 void prefDialog::onSound()
 {
-	soundConf soundconf(this);
-	if (soundconf.exec() == 1)
+	QString sound = QFileDialog::getOpenFileName( this, "Choose a sound file", QDir::currentPath(), "*" );
+	if ( !sound.isNull() )
 	{
-		loadSetting();
+		ui.wavefileLineEdit->setText(sound);
 	}
-
 }
+
 void prefDialog::onHttp()
 {
 	QString http = QFileDialog::getOpenFileName( this, "Choose a browser", QDir::currentPath(), "*" );
-    if ( !http.isNull() ) 
+	if ( !http.isNull() )
 	{
 		ui.httpLineEdit->setText(http+" %L");
 	}
 
 }
 
-// void prefDialog::onBeep( int id )
-// {
-// 	if(id==2)
-// 	{
-// 		ui.wavefileLineEdit->setEnabled(true);
-// 		ui.selectsoundPushButton->setEnabled(true);
-// 	}
-// 	else if(id==0 || id==1 )
-// 	{
-// 		ui.wavefileLineEdit->setEnabled(false);
-// 		ui.selectsoundPushButton->setEnabled(false);
-// 	}
-// }
+void prefDialog::onPlayer()
+{
+	QString player= QFileDialog::getOpenFileName( this, "Choose a program", QDir::currentPath(), "*" );
+	if ( !player.isNull() )
+	{
+		ui.playerLineEdit->setText(player);
+	}
+}
 
 void prefDialog::onBrowse()
 {
@@ -248,7 +226,7 @@ void prefDialog::onBrowse()
 void prefDialog::onImage()
 {
 	QString image = QFileDialog::getOpenFileName( this, "Choose a program", QDir::currentPath(), "*" );
-    if ( !image.isNull() ) 
+	if ( !image.isNull() )
 	{
 		ui.imageLineEdit->setText(image);
 	}
@@ -257,7 +235,7 @@ void prefDialog::onImage()
 void prefDialog::onPool()
 {
 	QString pool = QFileDialog::getExistingDirectory( this, "Choose a directory", ui.poolLineEdit->text());
-    if ( !pool.isEmpty() ) 
+	if ( !pool.isEmpty() )
 	{
 		ui.poolLineEdit->setText(pool);
 	}

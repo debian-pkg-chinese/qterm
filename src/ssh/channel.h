@@ -12,6 +12,7 @@
 #ifndef SSH_CHANNEL_H
 #define SSH_CHANNEL_H
 
+#include <stdint.h>
 #include <QtCore/QObject>
 
 namespace QTerm
@@ -37,17 +38,18 @@ public:
 signals:
     void dataReady(int id);
     void newChannel(int id);
+    void channelReady();
 private slots:
     void channelPacketReceived(int flag);
 private:
     typedef struct Channel_t
     {
-        u_int32_t localID;
-        u_int32_t localWindow;
-        u_int32_t localPacketSize;
-        u_int32_t remoteID;
-        u_int32_t remoteWindow;
-        u_int32_t remotePacketSize;
+        uint32_t localID;
+        uint32_t localWindow;
+        uint32_t localPacketSize;
+        uint32_t remoteID;
+        uint32_t remoteWindow;
+        uint32_t remotePacketSize;
         QByteArray data;
     }
     Channel;
@@ -72,6 +74,7 @@ public:
     unsigned long bytesAvailable();
 signals:
     void dataReady();
+    void channelReady();
 private slots:
     void channelPacketReceived(int flag);
 private:

@@ -10,6 +10,7 @@
 
 #include "qtermparam.h"
 #include "qtermconfig.h"
+#include "qtermglobal.h"
 //Added by qt3to4:
 
 #include "schemadialog.h"
@@ -22,13 +23,6 @@
 #include <QPalette>
 namespace QTerm
 {
-extern QString addrCfg;
-extern QString pathLib;
-extern QString pathCfg;
-
-extern QStringList loadNameList(Config*);
-extern bool loadAddress(Config*,int,Param&);
-extern void saveAddress(Config*,int,const Param&);
 
 /*
  *  Constructs a addrDialog which is a child of 'parent', with the
@@ -41,10 +35,9 @@ addrDialog::addrDialog( QWidget* parent, bool partial, Qt::WFlags fl )
 	: QDialog( parent, fl ),bPartial(partial),bgMenu(this),nLastItem(-1)
 {
 	ui.setupUi(this);
-	bgMenu.addButton(ui.radioButton1,0);
-	bgMenu.addButton(ui.radioButton2,1);
-	bgMenu.addButton(ui.radioButton3,2);
 	ui.menuLabel->setAutoFillBackground(true);
+	ui.portSpinBox->setRange(0, 65535);
+	ui.proxyportSpinBox->setRange(0, 65535);
 	if(bPartial)
 	{
 		ui.nameListWidget->hide();
@@ -54,27 +47,30 @@ addrDialog::addrDialog( QWidget* parent, bool partial, Qt::WFlags fl )
 		ui.connectPushButton->hide();
 		ui.closePushButton->setText( tr("Cancel") );
 		ui.applyPushButton->setText( tr("OK") );
-		resize( 440, 360 );
-	    setMinimumSize( QSize( 440, 360 ) );
-	    setMaximumSize( QSize( 440, 360 ) );
+		ui.closePushButton->move(ui.closePushButton->x()-210, ui.closePushButton->y());
+		ui.applyPushButton->move(ui.applyPushButton->x()-110, ui.applyPushButton->y());
+		ui.resetPushButton->move(ui.resetPushButton->x()-210, ui.resetPushButton->y());
+		ui.tabWidget->move(ui.tabWidget->x()-210, ui.tabWidget->y());
+		resize( 600, 600 );
+		setMinimumSize( QSize( 600, 600 ) );
+		setMaximumSize( QSize( 600, 600 ) );
 		setWindowTitle( tr( "Setting" ) );
 	}
 	else
 	{
-	    resize( 650, 360 );
-	    setMinimumSize( QSize( 650, 360 ) );
-	    setMaximumSize( QSize( 650, 360 ) );
+		resize( 800, 600 );
+		setMinimumSize( QSize( 800, 600 ) );
+		setMaximumSize( QSize( 800, 600 ) );
 		setWindowTitle( tr( "AddressBook" ) );
-		pConf = new Config(addrCfg.toLocal8Bit());
-		ui.nameListWidget->addItems(loadNameList(pConf));
+		ui.nameListWidget->addItems(Global::instance()->loadNameList());
 		if(ui.nameListWidget->count()>0)
 		{
-			loadAddress(pConf,0,param);
+            Global::instance()->loadAddress(0,param);
 			ui.nameListWidget->setCurrentRow(0);
 		}
 		else	// the default
-			if(pConf->hasSection("default"))
-				loadAddress(pConf,-1,param);
+			if(Global::instance()->addrCfg()->hasSection("default"))
+				Global::instance()->loadAddress(-1,param);
 		updateData(false);
 	}
 	connectSlots();
@@ -85,9 +81,6 @@ addrDialog::addrDialog( QWidget* parent, bool partial, Qt::WFlags fl )
  */
 addrDialog::~addrDialog()
 {
-    // no need to delete child widgets, Qt does it all for us
-	if(!bPartial)
-		delete pConf;
 }
 
 
@@ -106,7 +99,7 @@ void addrDialog::onNamechange(int item)
 			updateData(true);
 			if(nLastItem!=-1)
 			{
-				saveAddress(pConf,nLastItem,param);
+				Global::instance()->saveAddress(nLastItem,param);
 				ui.nameListWidget->item(nLastItem)->setText(param.m_strName);
 				ui.nameListWidget->setCurrentRow(item);
 				return;
@@ -114,14 +107,14 @@ void addrDialog::onNamechange(int item)
 		}
 	}
 	nLastItem = item;
-	loadAddress(pConf,item,param);
-	qDebug("item changed");
+	Global::instance()->loadAddress(item,param);
 	updateData(false);
 }
 
 void addrDialog::onAdd()
 {
 	QString strTmp;
+	Config * pConf = Global::instance()->addrCfg();
 	strTmp = pConf->getItemValue("bbs list", "num");
 	int num = strTmp.toInt();
 
@@ -142,7 +135,7 @@ void addrDialog::onAdd()
 	pConf->setItemValue("bbs list", "num", strTmp);
 	// update the data
 	updateData(true);
-	saveAddress(pConf,index+1,param);
+	Global::instance()->saveAddress(index+1,param);
 
 	// insert it to the listbox
 	ui.nameListWidget->insertItem(index+1, param.m_strName);
@@ -151,6 +144,7 @@ void addrDialog::onAdd()
 void addrDialog::onDelete()
 {
 	QString strTmp;
+	Config * pConf = Global::instance()->addrCfg();
 	strTmp = pConf->getItemValue("bbs list", "num");
 	int num = strTmp.toInt();
 
@@ -175,7 +169,7 @@ void addrDialog::onDelete()
 	strTmp.setNum(qMax(0,num-1));
 	pConf->setItemValue("bbs list", "num", strTmp);
 	// delete it from name listbox
-	loadAddress(pConf,qMin(index,num-2),param);
+	Global::instance()->loadAddress(qMin(index,num-2),param);
 	updateData(false);
 	ui.nameListWidget->takeItem(index);
 	ui.nameListWidget->setItemSelected(ui.nameListWidget->item(qMin(index,ui.nameListWidget->count()-1)), true);
@@ -185,7 +179,7 @@ void addrDialog::onApply()
 	updateData(true);
 	if(!bPartial)
 	{
-		saveAddress(pConf,ui.nameListWidget->currentRow(),param);
+		Global::instance()->saveAddress(ui.nameListWidget->currentRow(),param);
 		if(ui.nameListWidget->count()!=0)
 			ui.nameListWidget->item(ui.nameListWidget->currentRow())->setText(param.m_strName);
 	}
@@ -195,7 +189,7 @@ void addrDialog::onApply()
 void addrDialog::onClose()
 {
 	if(!bPartial)
-		pConf->save(addrCfg);
+		Global::instance()->addrCfg()->save();
 	done(0);
 }
 void addrDialog::onConnect()
@@ -212,10 +206,14 @@ void addrDialog::onConnect()
 			onApply();
 	}
 	if(!bPartial)
-		pConf->save(addrCfg);
+		Global::instance()->addrCfg()->save();
 	done(1);
 }
 
+void addrDialog::onReset()
+{
+	updateData(false);
+}
 void addrDialog::onFont()
 {
 	bool ok;
@@ -276,9 +274,9 @@ void addrDialog::onChooseScript()
 {
 	QString path;
 #if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
-	path=pathLib+"script";
+	path=Global::instance()->pathLib()+"script";
 #else
-	path=pathCfg+"script";
+	path=Global::instance()->pathCfg()+"script";
 #endif
 	
 	QString strFile = QFileDialog::getOpenFileName(
@@ -299,10 +297,23 @@ void addrDialog::onMenuColor()
 	if(color.isValid()==TRUE)
 	{
 		clrMenu=color;
-		QPalette palette;
-		palette.setColor(ui.menuLabel->backgroundRole(),color);
-		ui.menuLabel->setPalette(palette);
+		setMenuPixmap();
 	}
+}
+
+void addrDialog::setMenuPixmap()
+{
+	QPixmap pxm(ui.menuLabel->size());
+	QPainter p;
+	QFont font(strFontName,nFontSize);
+	p.begin(&pxm);
+	p.setBackgroundMode(Qt::TransparentMode);
+	p.setFont(font);
+	p.setPen(clrFg);
+	p.fillRect( ui.menuLabel->rect(), QBrush(clrMenu));
+	p.drawText(ui.menuLabel->rect(), Qt::AlignHCenter|Qt::AlignVCenter, "Menu Label");
+	ui.menuLabel->setPixmap(pxm);
+	p.end();
 }
 
 void addrDialog::setLabelPixmap()
@@ -325,14 +336,14 @@ void addrDialog::setLabelPixmap()
 void addrDialog::connectSlots()
 {
 	connect( ui.nameListWidget, SIGNAL(currentRowChanged(int)), this, SLOT(onNamechange(int)) );
-	connect( ui.nameListWidget, SIGNAL(doubleClicked(QListWidgetItem*)), this, SLOT(onConnect()));
-	connect( ui.nameListWidget, SIGNAL(returnPressed(QListWidgetItem*)), this, SLOT(onConnect()));
+	connect( ui.nameListWidget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(onConnect()));
 
 	connect( ui.addPushButton, SIGNAL(clicked()), this, SLOT(onAdd()) );
 	connect( ui.deletePushButton, SIGNAL(clicked()), this, SLOT(onDelete()) );
 	connect( ui.applyPushButton, SIGNAL(clicked()), this, SLOT(onApply()) );
 	connect( ui.closePushButton, SIGNAL(clicked()), this, SLOT(onClose()) );
 	connect( ui.connectPushButton, SIGNAL(clicked()), this, SLOT(onConnect()) );
+	connect( ui.resetPushButton, SIGNAL(clicked()), this, SLOT(onReset()) );
 
 	connect( ui.fontPushButton, SIGNAL(clicked()), this, SLOT(onFont()) );
 	connect( ui.fgcolorPushButton, SIGNAL(clicked()), this, SLOT(onFgcolor()) );
@@ -350,7 +361,7 @@ bool addrDialog::isChanged()
 {
 	return( param.m_strName != ui.nameLineEdit->text() ||
 		param.m_strAddr != ui.addrLineEdit->text() ||
-		param.m_uPort != ui.portLineEdit->text().toUShort() ||
+		param.m_uPort != ui.portSpinBox->value() ||
 		param.m_nHostType != ui.hostTypeComboBox->currentIndex() ||
 		param.m_bAutoLogin != ui.autoLoginCheckBox->isChecked() ||
 		param.m_strPreLogin != ui.preloginLineEdit->text() ||
@@ -376,7 +387,7 @@ bool addrDialog::isChanged()
 		param.m_strEscape != ui.escapeLineEdit->text() ||
 		param.m_nProxyType != ui.proxytypeComboBox->currentIndex() ||
 		param.m_strProxyHost != ui.proxyaddrLineEdit->text() ||
-		param.m_uProxyPort != ui.proxyportLineEdit->text().toUShort() ||
+		param.m_uProxyPort != ui.proxyportSpinBox->value() ||
 		param.m_bAuth != ui.authCheckBox->isChecked() ||
 		param.m_strProxyUser != ui.proxyuserLineEdit->text() ||
 		param.m_strProxyPasswd != ui.proxypasswdLineEdit->text() ||
@@ -388,10 +399,10 @@ bool addrDialog::isChanged()
 		param.m_bAutoReply != ui.replyCheckBox->isChecked() ||
 		param.m_bReconnect != ui.reconnectCheckBox->isChecked() ||
 		param.m_nReconnectInterval != ui.reconnectLineEdit->text().toInt() ||
-		param.m_nRetry != ui.retryLineEdit->text().toInt() ||
+//		param.m_nRetry != ui.retryLineEdit->text().toInt() ||
 		param.m_bLoadScript != ui.scriptCheckBox->isChecked() ||
 		param.m_strScriptFile != ui.scriptLineEdit->text() ||
-		param.m_nMenuType != bgMenu.checkedId() ||
+		param.m_nMenuType != ui.menuTypeComboBox->currentIndex() ||
 		param.m_clrMenu != clrMenu;
 		
 }
@@ -402,7 +413,7 @@ void addrDialog::updateData(bool save)
 	{
 		param.m_strName = ui.nameLineEdit->text();
 		param.m_strAddr = ui.addrLineEdit->text();
-		param.m_uPort = ui.portLineEdit->text().toUShort();
+		param.m_uPort = ui.portSpinBox->value();
 		param.m_nHostType = ui.hostTypeComboBox->currentIndex();
 		param.m_bAutoLogin = ui.autoLoginCheckBox->isChecked();
 		param.m_strPreLogin = ui.preloginLineEdit->text();
@@ -428,7 +439,7 @@ void addrDialog::updateData(bool save)
 		param.m_strEscape = ui.escapeLineEdit->text();
 		param.m_nProxyType = ui.proxytypeComboBox->currentIndex();
 		param.m_strProxyHost = ui.proxyaddrLineEdit->text();
-		param.m_uProxyPort = ui.proxyportLineEdit->text().toUShort();
+		param.m_uProxyPort = ui.proxyportSpinBox->value();
 		param.m_bAuth = ui.authCheckBox->isChecked();
 		param.m_strProxyUser = ui.proxyuserLineEdit->text();
 		param.m_strProxyPasswd = ui.proxypasswdLineEdit->text();
@@ -436,16 +447,16 @@ void addrDialog::updateData(bool save)
 		param.m_nMaxIdle = ui.idletimeLineEdit->text().toInt();
 		param.m_strReplyKey = ui.replykeyLineEdit->text();
 		if(param.m_strReplyKey.isNull())
-			printf("saving null\n");
+			qDebug("saving null");
 		param.m_strAntiString = ui.antiLineEdit->text();
 		param.m_bAutoReply = ui.replyCheckBox->isChecked();
 		param.m_strAutoReply = ui.replyLineEdit->text();
 		param.m_bReconnect = ui.reconnectCheckBox->isChecked();
 		param.m_nReconnectInterval = ui.reconnectLineEdit->text().toInt();
-		param.m_nRetry = ui.retryLineEdit->text().toInt();
+//		param.m_nRetry = ui.retryLineEdit->text().toInt();
 		param.m_bLoadScript = ui.scriptCheckBox->isChecked();
 		param.m_strScriptFile = ui.scriptLineEdit->text();
-		param.m_nMenuType = bgMenu.checkedId();
+		param.m_nMenuType = ui.menuTypeComboBox->currentIndex();
 		param.m_clrMenu = clrMenu;
 	}
 	else	// from param to display
@@ -454,7 +465,7 @@ void addrDialog::updateData(bool save)
 		ui.nameLineEdit->setText(param.m_strName );
 		ui.addrLineEdit->setText(param.m_strAddr );
 		strTmp.setNum(param.m_uPort);
-		ui.portLineEdit->setText(strTmp);
+		ui.portSpinBox->setValue(strTmp.toUInt());
 		ui.hostTypeComboBox->setCurrentIndex(param.m_nHostType);
 		ui.autoLoginCheckBox->setChecked(param.m_bAutoLogin);
 		ui.preloginLineEdit->setEnabled(param.m_bAutoLogin);
@@ -489,7 +500,7 @@ void addrDialog::updateData(bool save)
 		ui.proxytypeComboBox->setCurrentIndex(param.m_nProxyType);
 		ui.proxyaddrLineEdit->setText(param.m_strProxyHost);
 		strTmp.setNum(param.m_uProxyPort);
-		ui.proxyportLineEdit->setText(strTmp);
+		ui.proxyportSpinBox->setValue(strTmp.toUInt());
 		ui.authCheckBox->setChecked(param.m_bAuth);
 		ui.proxyuserLineEdit->setEnabled(param.m_bAuth);
 		ui.proxypasswdLineEdit->setEnabled(param.m_bAuth);
@@ -506,22 +517,21 @@ void addrDialog::updateData(bool save)
 		ui.replyLineEdit->setText(param.m_strAutoReply);
 		ui.reconnectCheckBox->setChecked(param.m_bReconnect);
 		ui.reconnectLineEdit->setEnabled(param.m_bReconnect);
-		ui.retryLineEdit->setEnabled(param.m_bReconnect);
+//		ui.retryLineEdit->setEnabled(param.m_bReconnect);
 		strTmp.setNum(param.m_nReconnectInterval);
 		ui.reconnectLineEdit->setText(strTmp);
 		strTmp.setNum(param.m_nRetry);
-		ui.retryLineEdit->setText(strTmp);
+//		ui.retryLineEdit->setText(strTmp);
 		ui.scriptCheckBox->setChecked(param.m_bLoadScript);
 		ui.scriptLineEdit->setEnabled(param.m_bLoadScript);
 		ui.scriptPushButton->setEnabled(param.m_bLoadScript);
 		ui.scriptLineEdit->setText(param.m_strScriptFile);
+		ui.menuTypeComboBox->setCurrentIndex(param.m_nMenuType);
 		//ui.menuGroup->setButton(param.m_nMenuType);
-		QRadioButton * rbMenu = qobject_cast<QRadioButton*>(bgMenu.button(param.m_nMenuType));
-		rbMenu->setChecked(true);
+		//QRadioButton * rbMenu = qobject_cast<QRadioButton*>(bgMenu.button(param.m_nMenuType));
+		//rbMenu->setChecked(true);
 		clrMenu = param.m_clrMenu;
-		QPalette palette;
-		palette.setColor(ui.menuLabel->backgroundRole(), clrMenu);
-		ui.menuLabel->setPalette(palette);
+		setMenuPixmap();
 	}
 }
 

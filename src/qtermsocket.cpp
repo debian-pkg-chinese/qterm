@@ -1,16 +1,23 @@
 #include "qterm.h"
 #include "qtermsocket.h"
+#include "hostinfo.h"
 
 // #include <q3socket.h>
 //Added by qt3to4:
 #include <QByteArray>
 #include <QTcpSocket>
+#include <QtGlobal>
 
-#if !defined(Q_OS_BSD4) && !defined(_OS_FREEBSD_) \
+#if !defined(Q_OS_BSD4) && !defined(Q_OS_FREEBSD_) \
 		    && !defined(Q_OS_MACX) && !defined(Q_OS_DARWIN)
 #include <malloc.h>
 #endif
+
 #include <stdlib.h>
+
+#if  defined(Q_OS_SOLARIS)
+#include <alloca.h>
+#endif
 
 #include <ctype.h>
 
@@ -36,7 +43,7 @@ SocketPrivate::SocketPrivate(QObject * parent)
 	:QObject(parent)
 {
 	m_socket = new QTcpSocket(this);
-    
+
 	// proxy related
 	proxy_type = NOPROXY;
 	proxy_state = 0;
@@ -134,7 +141,7 @@ void SocketPrivate::socketConnected()
 		sprintf(request,
 					"CONNECT %s:%u HTTP/1.0\r\n"
 					"%s\r\n", 
-					host.toLatin1(),port,
+					host.toLatin1().data(),port,
 					proxyauth!=NULL?proxyauth:"");
 
 
@@ -220,11 +227,22 @@ void SocketPrivate::flush()
 	m_socket->flush();
 }
 
-void SocketPrivate::connectToHost(const QString & hostname, quint16 portnumber)
+QAbstractSocket::SocketState SocketPrivate::state()
 {
-    host=hostname;
-    port=portnumber;
-    addr_host.sin_port=htons(portnumber);
+	return m_socket->state();
+}
+
+HostInfo * SocketPrivate::hostInfo()
+{
+	return m_hostInfo;
+}
+
+void SocketPrivate::connectToHost(HostInfo * hostInfo)
+{
+	m_hostInfo = hostInfo;
+	host=m_hostInfo->hostName();
+	port=m_hostInfo->port();
+	addr_host.sin_port=htons(port);
 
 	if( proxy_type == NOPROXY )
 	{
@@ -561,9 +579,9 @@ void TelnetSocket::setProxy( int nProxyType, bool bAuth,
 			strProxyUsr, strProxyPwd);
 }
 
-void TelnetSocket::connectToHost(const QString & host, quint16 port)
+void TelnetSocket::connectToHost(HostInfo * hostInfo)
 {
-	d_socket->connectToHost(host, port);
+	d_socket->connectToHost(hostInfo);
 }
 
 void TelnetSocket::close()
