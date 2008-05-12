@@ -12,6 +12,7 @@ AUTHOR:        kingson fiasco
 #include "popwidget.h"
 
 #include "qtermframe.h"
+#include "qtermglobal.h"
 
 #include <QPixmap>
 #include <QApplication>
@@ -23,12 +24,11 @@ AUTHOR:        kingson fiasco
 
 namespace QTerm
 {
-extern QString pathLib;
 
 popWidget::popWidget( Window *win, QWidget *parent, const char *name, Qt::WFlags f )
 		: QWidget(parent,f)
 {
-	QPixmap pxm(QPixmap(pathLib+"pic/popwidget.png") );
+	QPixmap pxm(QPixmap(Global::instance()->pathLib()+"pic/popwidget.png") );
 	if(!pxm.isNull())
 	{
 		resize(pxm.width(), pxm.height());
@@ -101,8 +101,10 @@ void popWidget::popup()
 	pTimer->start(nInterval);
 	nState = 0;
 
-	rcDesktop = qApp->desktop()->rect();
-	ptPos = QPoint( rcDesktop.width()-width()-5, rcDesktop.height()-5 );
+	QDesktopWidget * desktop = qApp->desktop();
+	QWidget * mainWidget = parentWidget();
+	rcDesktop = desktop->screenGeometry(desktop->screenNumber(mainWidget));
+	ptPos = QPoint(rcDesktop.x()+rcDesktop.width()-width()-5, rcDesktop.y()+rcDesktop.height()-5 );
 	move(ptPos);
 
 	if(!isVisible())
@@ -136,6 +138,7 @@ void popWidget::showTimer()
 			ptPos.setY( ptPos.y() + nStep );
 		else
 		{
+			hide();
 			nState = -1;
 			pTimer->stop();
 		}

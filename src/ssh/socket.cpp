@@ -18,6 +18,8 @@
 #include "ssh1.h"
 #include "ssh2.h"
 #include "qtermsocket.h"
+#include "hostinfo.h"
+#include <stdint.h>
 #include <openssl/bn.h>
 #include <QtCore/QStringList>
 
@@ -36,6 +38,7 @@ SSH2SocketPriv::SSH2SocketPriv(SocketPrivate * plainSocket, QByteArray & banner,
 {
     m_sessionID = NULL;
     m_auth = NULL;
+    m_hostInfo = plainSocket->hostInfo();
     m_inPacket = new SSH2InBuffer(plainSocket, this);
     m_outPacket = new SSH2OutBuffer(plainSocket, this);
     m_kex = new SSH2Kex(m_inPacket, m_outPacket, m_banner, QTERM_SSHV2_BANNER, this);
@@ -58,6 +61,7 @@ void SSH2SocketPriv::slotKexFinished(const QByteArray & sessionID)
     qDebug() << "kex finished";
 #endif
     m_auth = new SSH2Auth(m_sessionID, m_inPacket, m_outPacket);
+    m_auth->setHostInfo(m_hostInfo);
     connect(m_auth, SIGNAL(authFinished()), this, SLOT(slotAuthFinished()));
     connect(m_auth, SIGNAL(error(const QString&)), this, SIGNAL(error(const QString &)));
     m_auth->requestAuthService();
@@ -72,6 +76,7 @@ void SSH2SocketPriv::slotAuthFinished()
     m_channel = new SSH2Channel(m_inPacket, m_outPacket);
     connect(m_channel, SIGNAL(newChannel(int)), this, SLOT(slotNewChannel(int)));
     connect(m_channel, SIGNAL(dataReady(int)), this, SLOT(slotChannelData(int)));
+    connect(m_channel, SIGNAL(channelReady()), this, SIGNAL(socketReady()));
     m_channel->openChannel();
 }
 
@@ -110,7 +115,11 @@ SSH1SocketPriv::SSH1SocketPriv(SocketPrivate * plainSocket, QByteArray & banner,
     m_inPacket = new SSH1InBuffer(plainSocket, this);
     m_outPacket = new SSH1OutBuffer(plainSocket, this);
     m_kex = new SSH1Kex(m_inPacket, m_outPacket, this);
+    m_hostInfo = plainSocket->hostInfo();
     connect(m_kex, SIGNAL(kexFinished()), this, SLOT(slotKexFinished()));
+    connect(m_kex, SIGNAL(error(const QString&)), this, SIGNAL(error(const QString&)));
+    connect(m_inPacket, SIGNAL(error(const QString&)), this, SIGNAL(error(const QString&)));
+    // connect(m_outPacket, SIGNAL(error( const QString& )),this, SIGNAL(error( const QString& )));
 }
 
 SSH1SocketPriv::~SSH1SocketPriv()
@@ -123,6 +132,8 @@ void SSH1SocketPriv::slotKexFinished()
     qDebug() << "kex finished";
 #endif
     m_auth = new SSH1Auth(m_inPacket, m_outPacket, this);
+    m_auth->setHostInfo(m_hostInfo);
+    connect(m_auth, SIGNAL(error(const QString&)), this, SIGNAL(error(const QString &)));
     connect(m_auth, SIGNAL(authFinished()), this, SLOT(slotAuthFinished()));
     m_auth->requestAuthService();
 }
@@ -136,6 +147,7 @@ void SSH1SocketPriv::slotAuthFinished()
     m_channel = new SSH1Channel(m_inPacket, m_outPacket, this);
 //  connect ( m_channel, SIGNAL ( newChannel ( int ) ), this, SLOT ( slotNewChannel ( int ) ) );
     connect(m_channel, SIGNAL(dataReady()), this, SIGNAL(readyRead()));
+    connect(m_channel, SIGNAL(channelReady()), this, SIGNAL(socketReady()));
 //  m_channel->openChannel();
 }
 
@@ -160,7 +172,7 @@ SSHSocket::SSHSocket(QObject * parent)
     m_socket = new SocketPrivate(this);
     m_version = SSHUnknown;
     connect(m_socket, SIGNAL(hostFound()), this, SIGNAL(hostFound()));
-    connect(m_socket, SIGNAL(connected()), this, SIGNAL(connected()));
+    //connect(m_socket, SIGNAL(connected()), this, SIGNAL(connected()));
     connect(m_socket, SIGNAL(connectionClosed()), this, SIGNAL(connectionClosed()));
     connect(m_socket, SIGNAL(delayedCloseFinished()), this, SIGNAL(delayedCloseFinished()));
     connect(m_socket, SIGNAL(SocketState(int)), this, SIGNAL(SocketState(int)));
@@ -185,12 +197,13 @@ void SSHSocket::close()
     m_socket->close();
 }
 
-void SSHSocket::connectToHost(const QString & hostName, quint16 port)
+void SSHSocket::connectToHost(HostInfo * hostInfo)
 {
 #ifdef SSH_DEBUG
-    qDebug() << "connect to: " << hostName << port;
+    qDebug() << "connect to: " << hostInfo->hostName() << hostInfo->port();
 #endif
-    m_socket->connectToHost(hostName, port);
+    if (m_socket->state() == QAbstractSocket::UnconnectedState)
+        m_socket->connectToHost(hostInfo);
 }
 
 
@@ -265,6 +278,7 @@ void SSHSocket::readData()
 //   m_socket->write ( QTERM_SSHV1_BANNER );
     }
     disconnect(m_socket, SIGNAL(readyRead()), this, SLOT(readData()));
+    connect(m_priv, SIGNAL(socketReady()), this, SIGNAL(connected()));
     connect(m_priv, SIGNAL(readyRead()), this, SIGNAL(readyRead()));
     connect(m_priv, SIGNAL(error(const QString &)), this, SLOT(onError(const QString &)));
 }

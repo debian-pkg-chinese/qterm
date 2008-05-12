@@ -2,7 +2,7 @@
 ** Form interface generated from reading ui file 'keydialog.ui'
 **
 ** Created: Thu Jan 2 20:10:15 2003
-**      by: The User Interface Compiler ($Id$)
+**      by: The User Interface Compiler ($Id: keydialog.h 508 2008-05-11 16:07:32Z hephooey $)
 **
 ** WARNING! All changes made in this file will be lost!
 ****************************************************************************/

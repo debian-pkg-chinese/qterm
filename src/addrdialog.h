@@ -25,7 +25,6 @@ public:
     ~addrDialog();
 	
 	Param param;
-	Config * pConf;
 	void updateData(bool save);
 
 protected slots:
@@ -35,6 +34,7 @@ protected slots:
 	void onApply();
 	void onConnect();
 	void onClose();
+	void onReset();
 	void onFont();
 	void onFgcolor();
 	void onBgcolor();
@@ -47,6 +47,8 @@ protected:
 	void connectSlots();
 	bool isChanged();
 	void setLabelPixmap();
+	void setMenuPixmap();
+
 
 	bool bPartial;
 	QString strFontName;

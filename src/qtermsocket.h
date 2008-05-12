@@ -2,7 +2,9 @@
 #define QTERMSOCKET_H
 
 // _OS_X_ not defined if i dont include it
-#include <qglobal.h>
+#include <QtGlobal>
+#include <QtCore/QObject>
+#include <QtNetwork/QTcpSocket>
 // different 
 #if defined(Q_OS_WIN32) || defined(_OS_WIN32_)
 	#include <winsock2.h>
@@ -19,12 +21,9 @@
 	#include <arpa/inet.h>
 #endif
 
-#include <qobject.h>
-
-class QTcpSocket;
-
 namespace QTerm
 {
+class HostInfo;
 class SocketPrivate : public QObject
 {
 	Q_OBJECT
@@ -36,11 +35,13 @@ public:
 	void setProxy(int nProxyType, bool bAuth,
 			const QString& strProxyHost, quint16 uProxyPort,
 			const QString& strProxyUsr, const QString& strProxyPwd);
-	void connectToHost(const QString & hostname, quint16 portnumber);
+	void connectToHost(HostInfo * hostInfo);
 	void close();
 	QByteArray readBlock(unsigned long maxlen);
 	long writeBlock(const QByteArray & data);
 	unsigned long bytesAvailable();
+	QAbstractSocket::SocketState state();
+	HostInfo * hostInfo();
 
 signals:
 	void connected();
@@ -75,6 +76,7 @@ private:
 
 	struct sockaddr_in  addr_host;
 
+	HostInfo * m_hostInfo;
 	QTcpSocket *m_socket;
 };
 
@@ -94,7 +96,7 @@ public:
 	virtual void setProxy(int nProxyType, bool bAuth,
 			const QString& strProxyHost, quint16 uProxyPort,
 			const QString& strProxyUsr, const QString& strProxyPwd) = 0;
-	virtual void connectToHost(const QString & host, quint16 port) = 0;
+	virtual void connectToHost(HostInfo * hostInfo) = 0;
 	virtual void close() = 0;
 	virtual QByteArray readBlock(unsigned long maxlen) = 0;
 	virtual long writeBlock(const QByteArray & data) = 0;
@@ -120,7 +122,7 @@ public:
 	void setProxy(int nProxyType, bool bAuth,
 			const QString& strProxyHost, quint16 uProxyPort,
 			const QString& strProxyUsr, const QString& strProxyPwd);
-	void connectToHost(const QString & host, quint16 port);
+	void connectToHost(HostInfo * hostInfo);
 	void close();
 	QByteArray readBlock(unsigned long maxlen);
 	long writeBlock(const QByteArray & data);

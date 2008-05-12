@@ -3,6 +3,7 @@
 #include "qtermframe.h"
 #include "qterm.h"
 #include "qtermconfig.h"
+#include "qtermglobal.h"
 
 #include <QApplication>
 #include <QString>
@@ -15,8 +16,6 @@
 
 namespace QTerm
 {
-extern QString fileCfg;
-extern QString getOpenFileName(const QString&, QWidget*);
 
 #ifdef QTERM_DEBUG // for zmodemlog()
 #include <sys/time.h>
@@ -530,16 +529,15 @@ int Zmodem::ZmodemTInit(ZModem *info)
 	  return err ;
 
 	info->timeout = 60 ;
-    
-	Config conf(fileCfg);
-	QString path = conf.getItemValue("global","openfiledialog");
+
+	QString path = Global::instance()->fileCfg()->getItemValue("global","openfiledialog");
 	strFileList = QFileDialog::getOpenFileNames(0, "Choose the files", path, "All files(*)");
 	if(strFileList.count()!=0)
 	{
 		QStringList::Iterator itFile = strFileList.begin();
 		QFileInfo fi(*itFile);
-        conf.setItemValue("global","openfiledialog", fi.absoluteDir().absolutePath() );
-		conf.save(fileCfg);	
+		Global::instance()->fileCfg()->setItemValue("global","openfiledialog", fi.absoluteDir().absolutePath() );
+		Global::instance()->fileCfg()->save();	
 	}
 	
 	zmodemlog("ZmodemTInit[%s]: sent ZRQINIT\n", sname(info)) ;
@@ -2752,7 +2750,7 @@ int Zmodem::GotSendWaitAck(  ZModem *info )
 
 	offset = ZDec4(info->hdrData+1) ;
 
-	printf("last=%lx, now=%lx\n", info->lastOffset, offset);
+	qDebug("last=%lx, now=%lx", info->lastOffset, offset);
 
 	if( offset > info->lastOffset )
 	  info->lastOffset = offset ;
@@ -2783,7 +2781,7 @@ int Zmodem::GotSendPos(  ZModem *info )
 {
 	ZStatus(DataErr, ++info->errCount, NULL) ;
 	info->waitflag = 1 ;		/* next pkt should wait, to resync */
-	printf("GotSendPos, offset=%lx\n", info->offset);
+	qDebug("GotSendPos, offset=%lx", info->offset);
 	zmodemlog("GotSendPos[%s] %lx\n", sname(info), info->offset) ;
 	return startFileData(info) ;
 }

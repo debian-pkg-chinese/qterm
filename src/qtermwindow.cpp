@@ -20,16 +20,6 @@ AUTHOR:        kingson fiasco
 #include "qtermconvert.h"
 #include "qtermbuffer.h"
 #include "qtermparam.h"
-//Added by qt3to4:
-//#include <QCustomEvent>
-#include <QResizeEvent>
-#include <QMouseEvent>
-#include <QKeyEvent>
-#include <QEvent>
-#include <QByteArray>
-#include <QWheelEvent>
-#include <QCloseEvent>
-#include <QPixmap>
 #include "addrdialog.h"
 #include "qtermconfig.h"
 #include "qtermbbs.h"
@@ -44,6 +34,9 @@ AUTHOR:        kingson fiasco
 #include "qtermiplocation.h"
 #include "osdmessage.h"
 #include "statusBar.h"
+#include "progressBar.h"
+#include "qtermglobal.h"
+#include "hostinfo.h"
 
 #if !defined(_OS_WIN32_) && !defined(Q_OS_WIN32)
 #include <unistd.h>
@@ -56,6 +49,14 @@ AUTHOR:        kingson fiasco
 #include <stdio.h>
 #include <stdarg.h>
 
+#include <QResizeEvent>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QEvent>
+#include <QByteArray>
+#include <QWheelEvent>
+#include <QCloseEvent>
+#include <QPixmap>
 #include <QApplication>
 #include <QClipboard>
 #include <QToolButton>
@@ -74,38 +75,10 @@ AUTHOR:        kingson fiasco
 #include <QStringList>
 #include <QProgressBar>
 #include <QHBoxLayout>
-// #include <qapplication.h>
-// #include <qclipboard.h>
-// #include <q3toolbar.h>
-// #include <qtoolbutton.h>
-// #include <qmessagebox.h>
-// #include <qstatusbar.h>
-// #include <qfontdialog.h>
-// #include <qtextcodec.h>
-// #include <qsound.h>
-// #include <qtimer.h>
-// #include <q3popupmenu.h>
-// #include <q3textbrowser.h>
-// #include <qinputdialog.h>
-// #include <qtooltip.h>
-// #include <qregexp.h>
-// #include <q3filedialog.h>
-// #include <qtabwidget.h>
-// #include <qstringlist.h>
-// #include <q3progressbar.h>
-// #include <q3hbox.h>
-#include "progressBar.h"
+#include <QtCore/QProcess>
+
 namespace QTerm
 {
-extern QString fileCfg;
-extern QString addrCfg;
-extern QString pathLib;
-extern QString pathPic;
-extern QString pathCfg;
-
-extern void saveAddress(Config*,int,const Param&);
-extern void runProgram(const QString &);
-extern QString getOpenFileName(const QString&, QWidget*);
 
 // script thread
 DAThread::DAThread(Window *win)
@@ -263,13 +236,14 @@ char Window::direction[][5]=
 
 //constructor
 Window::Window( Frame * frame, Param param, int addr, QWidget * parent, const char * name, Qt::WFlags wflags )
-    : QMainWindow( parent, wflags ),location(),m_strMessage()
+    : QMainWindow( parent, wflags ),m_strMessage(),location()
 {
 
 	m_pFrame = frame;
 	m_param = param;
 	m_nAddrIndex = addr;
-
+	m_hostInfo = NULL;
+	QString pathLib = Global::instance()->pathLib();
 	setMouseTracking( true );
 
 //init the textline list
@@ -313,11 +287,7 @@ Window::Window( Frame * frame, Param param, int addr, QWidget * parent, const ch
 
 	connect(m_pDecode, SIGNAL(mouseMode(bool)), this, SLOT(setMouseMode(bool)));
 
-	#if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
 	m_popWin = new popWidget(this,m_pFrame);
-	#else
-	m_popWin = new popWidget(this);
-	#endif
 
 	m_pMessage->display(tr("Not Connected"));
 	statusBar()->setSizeGripEnabled(false);
@@ -381,7 +351,7 @@ Window::Window( Frame * frame, Param param, int addr, QWidget * parent, const ch
 	m_bCopyRect	= false;
 	m_bAntiIdle	= true;
 	m_bAutoReply= m_param.m_bAutoReply;
-	m_bBeep		= (m_pFrame->m_pref.nBeep!=0);
+	m_bBeep		= !(m_pFrame->m_pref.strPlayer.isEmpty()||m_pFrame->m_pref.strWave.isEmpty());
 	m_bMouse	= true;
 	m_bWordWrap = false;
 	m_bAutoCopy = true;
@@ -486,6 +456,7 @@ Window::~Window()
 	delete m_pIPLocation;
 	delete m_pMessage;
 	delete m_pSound;
+	delete m_hostInfo;
 
 #ifdef HAVE_PYTHON
 	// get the global python thread lock
@@ -810,7 +781,7 @@ void Window::mouseReleaseEvent( QMouseEvent * me )
 				strCmd.replace("%L",  "\""+strUrl+ "\"");
 				//cstrCmd.replace("%L",  strUrl.toLocal8Bit());
 			
-			runProgram(strCmd);
+			QProcess::startDetached(strCmd);
 		}
 		return;
 	}
@@ -990,12 +961,26 @@ void Window::imEndEvent(QIMEvent * e)
 //connect slot
 void Window::connectHost()
 {
+	if (m_hostInfo == NULL) {
+		if (m_param.m_nProtocolType == 0)
+			m_hostInfo = new TelnetInfo(m_param.m_strAddr , m_param.m_uPort);
+		else {
+			#ifndef SSH_ENABLED
+			m_hostInfo = new TelnetInfo(m_param.m_strAddr , m_param.m_uPort);
+			#else
+			SSHInfo * sshInfo = new SSHInfo(m_param.m_strAddr , m_param.m_uPort);
+			sshInfo->setUserName(m_param.m_strUser);
+			sshInfo->setPassword(m_param.m_strPasswd);
+			m_hostInfo = sshInfo;
+			#endif
+		}
+	}
 
 	m_pTelnet->setProxy( m_param.m_nProxyType, m_param.m_bAuth,
 			m_param.m_strProxyHost, m_param.m_uProxyPort,
 			m_param.m_strProxyUser, m_param.m_strProxyPasswd);
 	
-	m_pTelnet->connectHost( m_param.m_strAddr , m_param.m_uPort );
+	m_pTelnet->connectHost( m_hostInfo );
 }
 /* ------------------------------------------------------------------------ */
 /*	                                                                        */
@@ -1056,40 +1041,14 @@ if(m_pZmodem->transferstate == notransfer)
 	// because smth.org changed
     if( m_pDecode->bellReceive() ) //&& m_pBuffer->caret().y()==1 )
     {
-		if( m_bBeep )
-			if(m_pFrame->m_pref.strWave.isEmpty()||m_pFrame->m_pref.nBeep==3)
-				qApp->beep();
-			else {
-				//QSound::play(m_pFrame->m_pref.strWave);
-				switch (m_pFrame->m_pref.nMethod){
-				case 0:
-					m_pSound = new InternalSound(m_pFrame->m_pref.strWave);
-					break;
-				/*
-				#ifndef _NO_ARTS_COMPILED
-				case 1:
-					m_pSound = new QTermArtsSound(m_pFrame->m_pref.strWave);
-					break;
-				#endif
-				#ifndef _NO_ESD_COMPILED
-				case 2:
-					m_pSound = new QTermEsdSound(m_pFrame->m_pref.strWave);
-					break;
-				#endif
-				*/
-				case 3:
-					m_pSound = new ExternalSound(m_pFrame->m_pref.strPlayer,
-									m_pFrame->m_pref.strWave);
-					break;
-				default:
-					m_pSound = NULL;
-				}
-				if (m_pSound)
-					m_pSound->play();
-				delete m_pSound;
-				m_pSound = NULL;
-			}
-
+		if( m_bBeep ) {
+			m_pSound = new ExternalSound(m_pFrame->m_pref.strPlayer,
+							m_pFrame->m_pref.strWave);
+			if (m_pSound)
+				m_pSound->play();
+			delete m_pSound;
+			m_pSound = NULL;
+		}
 		if(m_pFrame->m_pref.bBlinkTab)
 			m_tabTimer->start(500);
 
@@ -1514,7 +1473,7 @@ void Window::disconnect()
 void Window::reconnect()
 {
 	if(!m_bConnected)
-		m_pTelnet->connectHost( m_param.m_strAddr , m_param.m_uPort );
+		connectHost();
 
 }
 
@@ -1545,7 +1504,7 @@ void Window::showStatusBar(bool bShow)
 void Window::runScript()
 {
 	// get the previous dir
-	QString file = getOpenFileName("Python File (*.py *.txt)", this);
+	QString file = Global::instance()->getOpenFileName("Python File (*.py *.txt)", this);
 
 	if(file.isEmpty())
 		return;
@@ -1560,8 +1519,7 @@ void Window::stopScript()
 void Window::viewMessages( )
 {
 	msgDialog msg(this);
-	Config conf(fileCfg);
-	const char * size = conf.getItemValue("global","msgdialog").toLatin1();
+	const char * size = Global::instance()->fileCfg()->getItemValue("global","msgdialog").toLatin1();
 	if(size!=NULL)
 	{
 		int x,y,cx,cy;
@@ -1577,8 +1535,8 @@ void Window::viewMessages( )
 	msg.exec();
 
 	QString strSize=QString("%1 %2 %3 %4").arg(msg.x()).arg(msg.y()).arg(msg.width()).arg(msg.height());
-	conf.setItemValue("global","msgdialog",strSize);
-	conf.save(fileCfg);
+	Global::instance()->fileCfg()->setItemValue("global","msgdialog",strSize);
+	Global::instance()->fileCfg()->save();
 
 }
 
@@ -1587,7 +1545,7 @@ void Window::setting( )
 	addrDialog set(this, true);
 	
 	set.param = m_param;
-	set.updateData(false);		 
+	set.updateData(false);
 
 	if(set.exec()==1)
 	{
@@ -1703,8 +1661,7 @@ void Window::jobDone(int e)
 	if( e == DAE_FINISH )
 	{
 		articleDialog article(this);
-		Config conf(fileCfg);
-		const char * size = conf.getItemValue("global","articledialog").toLatin1().data();
+		const char * size = Global::instance()->fileCfg()->getItemValue("global","articledialog").toLatin1().data();
 		if(size!=NULL)
 		{
 			int x,y,cx,cy;
@@ -1720,8 +1677,8 @@ void Window::jobDone(int e)
 		article.ui.textBrowser->setPlainText(article.strArticle);
 		article.exec();
 		QString strSize = QString("%1 %2 %3 %4").arg(article.x()).arg(article.y()).arg(article.width()).arg(article.height());
-		conf.setItemValue("global","articledialog",strSize);
-		conf.save(fileCfg);
+		Global::instance()->fileCfg()->setItemValue("global","articledialog",strSize);
+		Global::instance()->fileCfg()->save();
 	}
 	else if(e == DAE_TIMEOUT)
 	{
@@ -1820,10 +1777,7 @@ void Window::saveSetting()
 			0,this);
 	if ( mb.exec() == QMessageBox::Yes )
 	{
-		Config *pConf = new Config(addrCfg);
-		saveAddress(pConf, m_nAddrIndex, m_param);
-		pConf->save(addrCfg);
-		delete pConf;
+		Global::instance()->saveAddress(m_nAddrIndex, m_param);
 	}
 }
 
@@ -2239,7 +2193,7 @@ void Window::openLink()
 		strCmd += " \"" + m_pBBS->getUrl() +"\"";
 	else
 		strCmd.replace(QRegExp("%L",Qt::CaseInsensitive), m_pBBS->getUrl());
-	runProgram(strCmd);
+	QProcess::startDetached(strCmd);
 }
 
 void Window::previewLink()

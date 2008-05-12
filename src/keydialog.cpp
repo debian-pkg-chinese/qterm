@@ -2,18 +2,17 @@
 ** Form implementation generated from reading ui file 'keydialog.ui'
 **
 ** Created: Thu Jan 2 20:10:25 2003
-**      by: The User Interface Compiler ($Id$)
+**      by: The User Interface Compiler ($Id: keydialog.cpp 508 2008-05-11 16:07:32Z hephooey $)
 **
 ** WARNING! All changes made in this file will be lost!
 ****************************************************************************/
 
 #include "keydialog.h"
 #include "qtermconfig.h"
+#include "qtermglobal.h"
 #include <QFileDialog>
 namespace QTerm
 {
-extern QString fileCfg;
-//extern QString getOpenFileName(const QString&, QWidget*);
 
 /* 
  *  Constructs a keyDialog as a child of 'parent', with the 
@@ -34,7 +33,7 @@ keyDialog::keyDialog( QWidget* parent, Qt::WFlags fl )
 	
 	connectSlots();
 	
-	pConf = new Config(fileCfg);
+	pConf = Global::instance()->fileCfg();
 	
 	loadName();
 }
@@ -44,8 +43,6 @@ keyDialog::keyDialog( QWidget* parent, Qt::WFlags fl )
  */
 keyDialog::~keyDialog()
 {
-    // no need to delete child widgets, Qt does it all for us
-	delete pConf;
 }
 
 
@@ -97,7 +94,7 @@ void keyDialog::onAdd()
 	pConf->setItemValue("key",strTmp,strValue); 
 
 	strTmp = QString("name%1").arg(num);
-	pConf->setItemValue("key", strTmp, ui.nameEdit->text().toLocal8Bit());
+	pConf->setItemValue("key", strTmp, ui.nameEdit->text());
 
 	ui.nameListWidget->addItem(ui.nameEdit->text());
 	ui.nameListWidget->setCurrentRow(ui.nameListWidget->count()-1);
@@ -153,13 +150,13 @@ void keyDialog::onUpdate()
 	pConf->setItemValue("key",strTmp,strValue); 
 
 	strTmp = QString("name%1").arg(index);
-	pConf->setItemValue("key", strTmp, ui.nameEdit->text().toLocal8Bit());
+	pConf->setItemValue("key", strTmp, ui.nameEdit->text());
 
 	ui.nameListWidget->item(index)->setText(ui.nameEdit->text());
 }
 void keyDialog::onClose()
 {
-	pConf->save(fileCfg);
+	pConf->save();
 	done(1);
 }
 void keyDialog::onUp()
