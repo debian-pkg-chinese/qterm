@@ -3,6 +3,7 @@
 ##
 ## All lines beginning with `## DP:' are a description of the patch.
 ## DP: fix FTBFS in gcc-4.3
+## DP: see https://sourceforge.net/tracker/?func=detail&atid=557094&aid=2019410&group_id=79581
 
 @DPATCH@
 
