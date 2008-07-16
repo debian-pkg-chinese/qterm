@@ -1,0 +1,19 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 01_gcc-4.3.dpatch by LI Daobing <lidaobing@gmail.com>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: fix FTBFS in gcc-4.3
+
+@DPATCH@
+
+--- qterm-0.5.2.orig/src/qtermbuffer.cpp
++++ qterm-0.5.2/src/qtermbuffer.cpp
+@@ -18,7 +18,7 @@
+ #include <QString>
+ #include <QRect>
+ #include <QRegExp>
+-// #include <stdlib.h>
++#include <stdlib.h>
+ // #include <stdio.h>
+ // #include <math.h>
+ namespace QTerm
