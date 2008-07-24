@@ -2,15 +2,16 @@ Source: qterm
 Section: x11
 Priority: optional
 Maintainer: LI Daobing <lidaobing@gmail.com>
-Uploaders: Yu Guanghui <ygh@debian.org>
-Build-Depends: cdbs (>= 0.4.23-1.1), autotools-dev, debhelper(>= 6),
- libqt3-mt-dev, xutils, python-dev, libssl-dev (>= 0.9.8a-4),
+Uploaders: Yu Guanghui <ygh@debian.org>, Anthony Fok <foka@debian.org>
+Build-Depends: cdbs (>= 0.4.23-1.1), autotools-dev, debhelper (>= 6),
+ libqt3-mt-dev, xutils-dev, python-dev, libssl-dev (>= 0.9.8a-4),
  libesd0-dev, libarts1-dev, dpatch
-Standards-Version: 3.7.3
+Standards-Version: 3.8.0
 XS-Python-Version: current
 Vcs-Browser: http://pkg-newedit.googlecode.com/svn/unstable/qterm
 Vcs-Svn: http://pkg-newedit.googlecode.com/svn/unstable/qterm
 Homepage: http://qterm.sourceforge.net/
+DM-Upload-Allowed: yes
 
 Package: qterm
 Architecture: any

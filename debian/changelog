@@ -1,3 +1,17 @@
+qterm (1:0.4.1-2) unstable; urgency=low
+
+  * Rebuild so that qterm depends on python2.5 rather than python2.4.
+  * debian/patches/05_check_python_2.5.dpatch:
+    - Modified aclocal.m4 so that it detects Python 2.5 properly.
+  * debian/control:
+    - Added myself to Uploaders.
+    - Bumped Standards-Version to 3.8.0, no change needed.
+    - Added DM-Upload-Allowed: yes
+    - Fixed Lintian error: xutils is obsolete; Build-Depends on xutils-dev
+      instead, for xmkmf used in X includes detection.
+
+ -- Anthony Fok <foka@debian.org>  Thu, 24 Jul 2008 14:32:16 +0800
+
 qterm (1:0.4.1-1) unstable; urgency=low
 
   * new upstream release
