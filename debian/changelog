@@ -1,3 +1,13 @@
+qterm (1:0.4.1-3) unstable; urgency=low
+
+  * fix FTBFS under k*BSD (Closes: #493153), thanks Petr Salinger.
+    - debian/patches/08_relibtoolize.dpatch: added.
+    - debian/patches/09_autofiles.dpatch: added.
+    - debian/patches/05_check_python_2.5.dpatch: updated.
+    - debian/patches/00list: updated.
+
+ -- LI Daobing <lidaobing@gmail.com>  Sun, 03 Aug 2008 15:51:42 +0800
+
 qterm (1:0.4.1-2) unstable; urgency=low
 
   * Rebuild so that qterm depends on python2.5 rather than python2.4.
