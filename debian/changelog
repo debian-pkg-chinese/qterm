@@ -1,14 +1,14 @@
 qterm (1:0.5.2-1) unstable; urgency=low
 
   * new upstream release.
-  * debian/control: bump standards version to 3.7.3, no changing needed.
+  * debian/control: bump standards version to 3.8.0, no changing needed.
   * FTBFS in gcc-4.3
     - debian/control: rebuild depends on dpatch
     - debian/rules: add dpatch support
     - debian/patches/00list: added
     - debian/patches/07_gcc-4.3.dpatch: fix FTBFS in gcc-4.3
 
- -- LI Daobing <lidaobing@gmail.com>  Wed, 16 Jul 2008 18:45:39 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Sun, 21 Sep 2008 22:15:02 +0800
 
 qterm (1:0.5.1-1) unstable; urgency=low
 
