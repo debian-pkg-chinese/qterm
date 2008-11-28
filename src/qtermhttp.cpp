@@ -75,7 +75,7 @@ void Http::getLink(const QString& url, bool preview)
 	if(QFile::exists(Global::instance()->pathCfg()+"hosts.cfg"))
 	{
 		Config conf(Global::instance()->pathCfg()+"hosts.cfg");
-		QString strTmp = conf.getItemValue("hosts",u.host());
+		QString strTmp = conf.getItemValue("hosts",u.host()).toString();
 		if(!strTmp.isEmpty())
 		{
 			QString strUrl = url;
@@ -111,7 +111,7 @@ void Http::httpResponse( const QHttpResponseHeader& hrh)
 
 	if(m_bPreview)
 	{
-		QString strPool = Frame::instance()->m_pref.strPoolPath;
+		QString strPool = Global::instance()->m_pref.strPoolPath;
 		
 		m_strHttpFile = strPool + m_strHttpFile;
 
@@ -208,7 +208,7 @@ void Http::httpDone(bool err)
 	}
 
 	if(m_bPreview) {
-		QString strPool = Frame::instance()->m_pref.strPoolPath;
+		QString strPool = Global::instance()->m_pref.strPoolPath;
 		previewImage(m_strHttpFile);
 		QFileInfo fi = QFileInfo(m_strHttpFile);
 		ImageViewer::genThumb(Global::instance()->pathPic()+"pic/shadow.png", strPool, fi.fileName());
@@ -221,7 +221,7 @@ void Http::httpDone(bool err)
 
 void Http::previewImage(const QString& filename)
 {
-	QString strViewer = Global::instance()->fileCfg()->getItemValue("preference","image");
+	QString strViewer = Global::instance()->fileCfg()->getItemValue("preference","image").toString();
 
 	if(strViewer.isEmpty())
 	{

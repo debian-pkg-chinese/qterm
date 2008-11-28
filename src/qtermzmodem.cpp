@@ -530,7 +530,7 @@ int Zmodem::ZmodemTInit(ZModem *info)
 
 	info->timeout = 60 ;
 
-	QString path = Global::instance()->fileCfg()->getItemValue("global","openfiledialog");
+	QString path = Global::instance()->fileCfg()->getItemValue("global","openfiledialog").toString();
 	strFileList = QFileDialog::getOpenFileNames(0, "Choose the files", path, "All files(*)");
 	if(strFileList.count()!=0)
 	{
@@ -1043,7 +1043,7 @@ FILE * Zmodem::ZOpenFile(char *name, ulong crc, ZModem *info)
 	//to be complete
 	FILE *rval;
 	int apnd=0;
-	QString str = Frame::instance()->m_pref.strZmPath+G2U(name); // lazy, should use bbs2unicode
+	QString str = Global::instance()->m_pref.strZmPath+G2U(name); // lazy, should use bbs2unicode
 	rval = fopen(str.toLocal8Bit(), apnd ? "ab" : "wb") ;
 
 	if( rval == NULL )

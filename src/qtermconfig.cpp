@@ -21,12 +21,17 @@ REVISION:      2001.10.10 first created.
 namespace QTerm
 {
 
-const QString Config::m_version = "1.0";
+const QString Config::m_version = "1.5";
 
 Config::Config(const QString & szFileName)
 {
-    m_settings = new QSettings(szFileName, QSettings::IniFormat);
-    checkVersion();
+    if (QFile::exists(szFileName)) {
+        m_settings = new QSettings(szFileName, QSettings::IniFormat);
+        checkVersion();
+    } else {
+        m_settings = new QSettings(szFileName, QSettings::IniFormat);
+        m_settings->setValue("version", m_version);
+    }
 }
 
 Config::~Config()
@@ -47,7 +52,46 @@ void Config::upgrade()
     if (!m_settings->contains("version")) {
         m_settings->setValue("version", m_version);
     }
+    addShortcuts();
+    addToolBars();
     save();
+}
+
+void Config::addShortcuts()
+{
+    if (hasSection("Shortcuts"))
+        return;
+    m_settings->beginGroup("Shortcuts");
+    m_settings->setValue("actionAbout","F1");
+    m_settings->setValue("actionAddress","F2");
+    m_settings->setValue("actionQuickConnect","F3");
+    m_settings->setValue("actionRefresh","F5");
+    m_settings->setValue("actionFull","F6");
+    m_settings->setValue("actionScriptRun","F7");
+    m_settings->setValue("actionScriptStop","F8");
+    m_settings->setValue("actionCopyArticle","F9");
+    m_settings->setValue("actionViewMessage","F10");
+    m_settings->setValue("actionBoss","F12");
+    m_settings->setValue("actionCopy","Ctrl+Ins");
+    m_settings->setValue("actionPaste","Shift+Ins");
+    m_settings->endGroup();
+}
+
+void Config::addToolBars()
+{
+    if (hasSection("ToolBars"))
+        return;
+    m_settings->beginGroup("ToolBars");
+    QStringList listActions;
+    listActions << "actionQuickConnect";
+    m_settings->setValue("mainToolBar", listActions);
+    listActions.clear();
+    listActions << "actionDisconnect" << "Separator" << "actionCopy" << "actionPaste" << "actionRect" << "actionColorCopy" << "Separator" << "actionFont" << "actionColor" << "actionRefresh" << "Separator" << "actionCurrentSession" << "Separator" << "actionCopyArticle" << "actionAntiIdle" << "actionAutoReply" << "actionViewMessage" << "actionMouse" << "actionBeep" << "actionReconnect";
+    m_settings->setValue("bbsOperationsToolBar",listActions);
+    m_settings->setValue("mainToolBarShown", true);
+    m_settings->setValue("customKeyToolBarShown", true);
+    m_settings->setValue("bbsOperationsToolBarShown",true);
+    m_settings->endGroup();
 }
 
 bool Config::checkVersion()
@@ -60,7 +104,7 @@ bool Config::checkVersion()
     } else if (m_version != version) {
         QMessageBox::warning(0, "Version Mismath","The version of your config file is not match the current QTerm version.\n" "It will be automatically updated, but you should check for errors");
         m_settings->setValue("version", m_version);
-        save();
+        upgrade();
         return false;
     }
     return true;
@@ -91,23 +135,25 @@ bool Config::hasSection(const QString & szSection)
     return section.contains(szSection);
 }
 
+bool Config::hasItem(const QString & szSection, const QString & szItemName)
+{
+    QString key = szSection+"/"+szItemName;
+    return m_settings->contains(key);
+}
+
 bool Config::setItemValue(const QString & szSection,
-            const QString & szItemName, const QString & szItemValue)
+            const QString & szItemName, const QVariant & szItemValue)
 {
     QString key = szSection+"/"+szItemName;
     m_settings->setValue(key, szItemValue);
     return checkError();
 }
 
-QString Config::getItemValue(const QString & szSection, const QString & szItemName)
+QVariant Config::getItemValue(const QString & szSection, const QString & szItemName)
 {
     QString key = szSection+"/"+szItemName;
     QVariant data = m_settings->value(key);
-    if (data.isValid()) {
-        return data.toString();
-    } else {
-        return "";
-    }
+    return data;
 }
 
 bool Config::renameSection(const QString & szSection, const QString & szNewName)
