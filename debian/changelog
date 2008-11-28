@@ -1,8 +1,8 @@
-qterm (1:0.5.3-0ubuntu1~ppa1) intrepid; urgency=low
+qterm (1:0.5.3-1) unstable; urgency=low
 
   * new upstream release.
 
- -- LI Daobing <lidaobing@gmail.com>  Fri, 28 Nov 2008 19:03:23 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Fri, 28 Nov 2008 19:22:01 +0800
 
 qterm (1:0.5.2-1) experimental; urgency=low
 
