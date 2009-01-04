@@ -7,8 +7,10 @@ qterm (1:0.5.3-2) unstable; urgency=low
   * install desktop and icon (LP: #312932)
     - debian/patches/08_desktop.dpatch: added
     - debian/patches/00list: updated
+  * debian/control: add ${misc:Depends} to depends, fix
+    debhelper-but-no-misc-depends 
 
- -- LI Daobing <lidaobing@gmail.com>  Sun, 04 Jan 2009 19:07:45 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Sun, 04 Jan 2009 19:12:58 +0800
 
 qterm (1:0.5.3-1) unstable; urgency=low
 
