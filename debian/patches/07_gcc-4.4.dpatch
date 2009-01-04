@@ -18,18 +18,6 @@ diff -urNad qterm~/src/main.cpp qterm/src/main.cpp
  #if !defined(_OS_WIN32_) && !defined(Q_OS_WIN32)
  #include <sys/stat.h>
  #include <errno.h>
-diff -urNad qterm~/src/qtermbuffer.cpp qterm/src/qtermbuffer.cpp
---- qterm~/src/qtermbuffer.cpp	2009-01-04 18:49:48.000000000 +0800
-+++ qterm/src/qtermbuffer.cpp	2009-01-04 18:50:21.000000000 +0800
-@@ -18,7 +18,7 @@
- #include <QString>
- #include <QRect>
- #include <QRegExp>
--// #include <stdlib.h>
-+#include <stdlib.h>
- // #include <stdio.h>
- // #include <math.h>
- namespace QTerm
 diff -urNad qterm~/src/ssh/transport.cpp qterm/src/ssh/transport.cpp
 --- qterm~/src/ssh/transport.cpp	2008-03-22 15:06:01.000000000 +0800
 +++ qterm/src/ssh/transport.cpp	2009-01-04 18:50:48.000000000 +0800
