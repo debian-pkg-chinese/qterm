@@ -1,3 +1,12 @@
+qterm (1:0.5.3-1ubuntu1) jaunty; urgency=low
+
+  * FTBFS with GCC 4.4: missing #include (Closes: #510670)
+    - debian/patches/07_gcc-4.3.dpatch: rename tp 07_gcc-4.4.dpatch
+    - debian/patches/07_gcc-4.4.dpatch: updated
+    - debian/patches/00list: updated
+
+ -- LI Daobing <lidaobing@gmail.com>  Sun, 04 Jan 2009 18:53:08 +0800
+
 qterm (1:0.5.3-1) unstable; urgency=low
 
   * new upstream release.
