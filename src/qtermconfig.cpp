@@ -21,7 +21,7 @@ REVISION:      2001.10.10 first created.
 namespace QTerm
 {
 
-const QString Config::m_version = "1.5";
+const QString Config::m_version = "1.7";
 
 Config::Config(const QString & szFileName)
 {
@@ -44,11 +44,11 @@ void Config::upgrade()
 {
     QStringList keys = m_settings->allKeys();
 
-    QByteArray data;
-    foreach (QString eachKey, keys) {
-        data = m_settings->value(eachKey).toByteArray();
-        m_settings->setValue(eachKey,QString::fromUtf8(data.data()));
-    }
+    //QByteArray data;
+    //foreach (QString eachKey, keys) {
+    //    data = m_settings->value(eachKey).toByteArray();
+    //    m_settings->setValue(eachKey,QString::fromUtf8(data.data()));
+    //}
     if (!m_settings->contains("version")) {
         m_settings->setValue("version", m_version);
     }

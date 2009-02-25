@@ -55,11 +55,11 @@ QString BBS::getMessage()
 		return message;
 
 	int i = 1;
-	message = QString::fromLatin1(m_pBuffer->screen(0)->getText().simplified());
+	message = (m_pBuffer->screen(0)->getText().simplified());
 	line = m_pBuffer->screen(i);
 	while (isUnicolor(line))
 	{
-		message += "\n" + QString::fromLatin1(line->getText());
+		message += "\n" + (line->getText());
 		i++;
 		line = m_pBuffer->screen(i);
 	}
@@ -210,25 +210,31 @@ QRect BBS::getSelectRect()
             QString cstr = line->getText( 0, m_ptCursor.x() );
 
             QRegExp reg( "[a-zA-Z0-9][).\\]]" );
-            char indexChar = cstr.indexOf( reg );
+            int indexChar = cstr.indexOf( reg );
             if (indexChar != -1)
             {
 				m_cMenuChar = cstr.at(indexChar).toLatin1();
 
                 int nMenuStart = indexChar;
-                if ( cstr[indexChar-1] == '(' || cstr[indexChar-1] == '[' )
+                if ( indexChar > 0 && (cstr[indexChar-1] == '(' || cstr[indexChar-1] == '[') )
                     nMenuStart--;
 
                 cstr = line->getText();
                 reg = QRegExp( "[^ ]" );
 
                 int nMenuBaseLength = 20;
-                int nMenuLength = cstr.lastIndexOf( reg, nMenuStart + nMenuBaseLength ) - nMenuStart + 1;
-                if ( nMenuLength == nMenuBaseLength + 1 )
-                    nMenuLength = cstr.indexOf( " ", nMenuStart + nMenuBaseLength ) - nMenuStart;
+                int nMenuEnd = cstr.lastIndexOf( reg, nMenuStart + nMenuBaseLength );
+                if (nMenuEnd == -1) {
+                    nMenuEnd = cstr.indexOf( " ", nMenuStart + nMenuBaseLength );
+                }
+
+                int nMenuLength = nMenuBaseLength + 1;
+                if (nMenuEnd != -1) {
+                    nMenuLength = line->beginIndex(nMenuEnd) - line->beginIndex(nMenuStart) + line->size(line->beginIndex(nMenuEnd));
+                }
 				if( m_ptCursor.x()>=nMenuStart && m_ptCursor.x()<=nMenuStart+nMenuLength )
 				{
-					rect.setX(nMenuStart);
+					rect.setX(line->beginIndex(nMenuStart));
 					rect.setY(m_ptCursor.y());
 					rect.setWidth(nMenuLength);
 					rect.setHeight(1);
@@ -456,13 +462,13 @@ bool BBS::checkUrl(QRect& rcUrl, QRect& rcOld, bool checkIP)
 		m_strUrl = strText.mid(url, end-url);
 	if(nNoType==0)
 		m_strUrl = "mailto:"+m_strUrl;
-	else if(nNoType==1)
+	else if(nNoType==1) {
 		if(checkIP) {
 			if( m_strIP[ m_strIP.length()-1 ] == '*' )
 				m_strIP.replace( m_strIP.length() -1 , 1, "1" );
 		}else
 			m_strUrl = "http://"+m_strUrl;
-	
+    }
 	rcUrl = QRect(url, m_ptCursor.y(), end-url, 1);
 	if (!checkIP) // don't update when we only need ip
 		m_rcUrl = rcUrl;

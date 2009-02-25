@@ -29,6 +29,8 @@ AUTHOR:        kingson fiasco
 #include <locale.h>
 #endif
 
+#include <stdio.h>
+
 using namespace QTerm;
 
 #ifdef HAVE_PYTHON
@@ -46,6 +48,7 @@ int main( int argc, char ** argv )
 {
 
     QApplication a( argc, argv );
+    a.setApplicationName("QTerm");
     qInstallMsgHandler(qtMessageHandler);
 
     //qApp=&a;

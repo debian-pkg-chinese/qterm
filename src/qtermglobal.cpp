@@ -13,6 +13,7 @@
 #include "qtermglobal.h"
 #include "qtermconfig.h"
 #include "qtermparam.h"
+#include "qtermconvert.h"
 #include "qterm.h"
 #include <QtCore/QDir>
 #include <QtCore/QFileInfo>
@@ -21,7 +22,6 @@
 #include <QtGui/QApplication>
 #include <QtGui/QFileDialog>
 #include <QtGui/QMessageBox>
-#include <QtDBus>
 
 #if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
 #ifndef MAX_PATH
@@ -35,9 +35,6 @@ namespace QTerm
 {
 
 Global * Global::m_Instance = 0;
-static const QString dbusServiceName = "org.kde.VisualNotifications";
-static const QString dbusInterfaceName = "org.kde.VisualNotifications";
-static const QString dbusPath = "/VisualNotifications";
 
 Global * Global::instance()
 {
@@ -55,7 +52,7 @@ Global * Global::instance()
 }
 
 Global::Global()
-        : m_fileCfg("./qterm.cfg"), m_addrCfg("./address.cfg"), m_pathLib("./"), m_pathPic("./"), m_pathCfg("./"), m_windowState(), m_status(INIT_OK), m_style(), m_fullScreen(false), m_dbusAvailable(false), m_language(Global::English),m_idList(), m_showToolBar()
+        : m_fileCfg("./qterm.cfg"), m_addrCfg("./address.cfg"), m_pathLib("./"), m_pathPic("./"), m_pathCfg("./"), m_windowState(), m_status(INIT_OK), m_style(), m_fullScreen(false), m_language(Global::English), m_showToolBar()
 {
     if (!iniWorkingDir(qApp->arguments()[0])) {
         m_status = INIT_ERROR;
@@ -63,11 +60,11 @@ Global::Global()
     }
     m_config = new Config(m_fileCfg);
     m_address = new Config(m_addrCfg);
+    m_converter = new Convert();
     if (!iniSettings()) {
         m_status = INIT_ERROR;
         return;
     }
-    initDBus();
 }
 
 bool Global::isOK()
@@ -157,7 +154,7 @@ bool Global::loadAddress(int n, Param& param)
     param.m_strPostLogin = m_address->getItemValue(strSection, "postlogin").toString();
 
     strTmp = m_address->getItemValue(strSection, "bbscode").toString();
-    param.m_nBBSCode = strTmp.toInt();
+    param.m_BBSCode = strTmp;
     strTmp = m_address->getItemValue(strSection, "displaycode").toString();
     param.m_nDispCode = strTmp.toInt();
     strTmp = m_address->getItemValue(strSection, "autofont").toString();
@@ -247,7 +244,7 @@ void Global::saveAddress(int n, const Param& param)
     m_address->setItemValue(strSection, "password", param.m_strPasswd);
     m_address->setItemValue(strSection, "postlogin", param.m_strPostLogin);
 
-    strTmp.setNum(param.m_nBBSCode);
+    strTmp=param.m_BBSCode;
     m_address->setItemValue(strSection, "bbscode", strTmp);
     strTmp.setNum(param.m_nDispCode);
     m_address->setItemValue(strSection, "displaycode", strTmp);
@@ -311,7 +308,7 @@ void Global::loadPrefence()
 {
     QString strTmp;
     strTmp = m_config->getItemValue("preference", "xim").toString();
-    m_pref.nXIM = strTmp.toInt() == 0 ? GBK : Big5;
+    m_pref.XIM = (Global::Conversion)strTmp.toInt();
     strTmp = m_config->getItemValue("preference", "wordwrap").toString();
     m_pref.nWordWrap = strTmp.toInt();
     strTmp = m_config->getItemValue("preference", "wheel").toString();
@@ -592,9 +589,9 @@ const QString & Global::escapeString() const
     return m_escape;
 }
 
-Global::Codec Global::clipCodec() const
+Global::Conversion Global::clipConversion() const
 {
-    return m_clipCodec;
+    return m_clipConversion;
 }
 
 Global::Language Global::language() const
@@ -622,9 +619,9 @@ bool Global::showSwitchBar() const
     return m_switchBar;
 }
 
-void Global::setClipCodec(Global::Codec codec)
+void Global::setClipConversion(Global::Conversion conversionId)
 {
-    m_clipCodec = codec;
+    m_clipConversion = conversionId;
 }
 
 void Global::setEscapeString(const QString & escapeString)
@@ -688,11 +685,7 @@ void Global::loadConfig()
     setEscapeString("");
 
     strTmp = m_config->getItemValue("global", "clipcodec").toString();
-    if (strTmp == "0") {
-        setClipCodec(Global::GBK);
-    } else {
-        setClipCodec(Global::Big5);
-    }
+    setClipConversion((Global::Conversion)strTmp.toInt());
 
     strTmp = m_config->getItemValue("global", "vscrollpos").toString();
     if (strTmp == "0") {
@@ -767,7 +760,7 @@ void Global::saveConfig()
 
 
     // Should we convert the numbers to strings like "GBK" and "Big5";
-    strTmp.setNum(clipCodec());
+    strTmp.setNum(clipConversion());
     m_config->setItemValue("global", "clipcodec", strTmp);
 
     strTmp.setNum(scrollPosition());
@@ -809,137 +802,40 @@ void Global::cleanup()
     }
 }
 
-bool Global::dbusExist() const
+void Global::openUrl(const QString & url)
 {
-    return m_dbusAvailable;
+    QString command = m_pref.strHttp;
+    if(command.indexOf("%L")==-1) // no replace
+        //QApplication::clipboard()->setText(strUrl);
+        command += " \"" + url +"\"";
+    else
+        command.replace("%L",  "\"" + url + "\"");
+        //cstrCmd.replace("%L",  strUrl.toLocal8Bit());
+
+    //qDebug()<<"run command " << strCmd;
+    //QProcess::startDetached(strCmd);
+    //TODO: How to do this in Windows?
+#if !defined(_OS_WIN32_) && !defined(Q_OS_WIN32)
+    command += " &";
+#endif
+    system(command.toUtf8().data());
 }
 
-void Global::createDBusConnection()
+QString Global::convert(const QString & source, Global::Conversion flag)
 {
-    bool connected = QDBusConnection::sessionBus().connect(QString(), // from any service
-                dbusPath,
-                dbusInterfaceName,
-                "ActionInvoked",
-                this,
-                SLOT(slotDBusNotificationActionInvoked(uint,const QString&)));
-    if (!connected) {
-            qDebug() << "warning: failed to connect to NotificationClosed dbus signal";
+    switch (flag) {
+    case No_Conversion:
+        return source;
+    case Simplified_To_Traditional:
+        return m_converter->S2T(source);
+    case Traditional_To_Simplified:
+        return m_converter->T2S(source);
+    default:
+        return source;
     }
-    connected = QDBusConnection::sessionBus().connect(QString(), // from any service
-            dbusPath,
-            dbusInterfaceName,
-            "NotificationClosed",
-            this,
-            SLOT(slotDBusNotificationClosed(uint,uint)));
-    if (!connected) {
-        qDebug() << "warning: failed to connect to NotificationClosed dbus signal";
-    }
-}
-
-void Global::initDBus()
-{
-    m_idList.clear();
-    QDBusConnectionInterface* interface = QDBusConnection::sessionBus().interface();
-    m_dbusAvailable = interface && interface->isServiceRegistered(dbusServiceName);
-
-    if( m_dbusAvailable) {
-        qDebug() << "using" << dbusServiceName << "for popups";
-        createDBusConnection();
-    }
-
-    // to catch register/unregister events from service in runtime
-    connect(interface, SIGNAL(serviceOwnerChanged(const QString&, const QString&, const QString&)), this, SLOT(slotServiceOwnerChanged(const QString&, const QString&, const QString&)));
-}
-
-void Global::slotServiceOwnerChanged( const QString & serviceName, const QString & oldOwner, const QString & newOwner )
-{
-    if(serviceName == dbusServiceName)
-    {
-        if(oldOwner.isEmpty())
-        {
-            m_idList.clear();
-            m_dbusAvailable = true;
-            qDebug() << dbusServiceName << " was registered on bus, now using it to show popups";
-            // connect to action invocation signals
-            createDBusConnection();
-        }
-        if(newOwner.isEmpty())
-        {
-            m_idList.clear();
-            m_dbusAvailable = false;
-            qDebug() << dbusServiceName << " was unregistered from bus, using passive popups from now on";
-        }
-    }
-}
-
-bool Global::sendDBusNotification(const QString & summary, const QString & body, QList<Global::Action> actions)
-{
-    QDBusMessage message = QDBusMessage::createMethodCall( dbusServiceName, dbusPath, dbusInterfaceName, "Notify" );
-    uint id = 0;
-    QList<QVariant> args;
-    args.append("QTerm");
-    args.append(id); // If I send 0 directly, this will be an int32 instead of uin32, resulting an unknown method error.
-    args.append(QString());
-    args.append(QString());
-    args.append(summary);
-    args.append(body);
-    QStringList actionList;
-    foreach (Global::Action action, actions) {
-        if (action==Global::Show_QTerm) {
-            actionList.append(QString::number(Global::Show_QTerm));
-            actionList.append("Show QTerm");
-        }
-    }
-    args.append(actionList);
-    args.append(QVariantMap());
-    args.append(6*1000);
-    message.setArguments(args);
-    QDBusMessage replyMsg = QDBusConnection::sessionBus().call(message);
-    if(replyMsg.type() == QDBusMessage::ReplyMessage) {
-        if (!replyMsg.arguments().isEmpty()) {
-            uint dbus_id = replyMsg.arguments().at(0).toUInt();
-            m_idList.append(dbus_id);
-        } else {
-            qDebug() << "error: received reply with no arguments";
-        }
-    } else if (replyMsg.type() == QDBusMessage::ErrorMessage) {
-        qDebug() << "error: failed to send dbus message";
-    } else {
-        qDebug() << "unexpected reply type";
-    }
-    //TODO: handle errors
-    return true;
-}
-
-void Global::slotDBusNotificationActionInvoked(uint id, const QString action)
-{
-    if (m_idList.contains(id)) {
-        if (action.toInt() == Global::Show_QTerm) {
-            closeNotification(id);
-            emit showQTerm();
-        }
-    }
-}
-
-void Global::slotDBusNotificationClosed(uint id, uint reason)
-{
-    if (m_idList.contains(id))
-        m_idList.removeAll(id);
-}
-
-void Global::closeNotification(uint id)
-{
-    if (m_idList.contains(id)) {
-        m_idList.removeAll(id);
-        QDBusMessage m = QDBusMessage::createMethodCall( dbusServiceName, dbusPath, dbusInterfaceName, "CloseNotification" );
-        QList<QVariant> args;
-        args.append(id);
-        m.setArguments( args );
-        bool queued = QDBusConnection::sessionBus().send(m);
-        if (!queued) {
-            qDebug() << "warning: failed to queue dbus message";
-        }
-    }
+    // Just in case
+    qDebug("Global::convert: we should not be here");
+    return source;
 }
 
 } // namespace QTerm
