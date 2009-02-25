@@ -41,6 +41,7 @@ public:
     void enableMenuToolBar(bool);
     void popupFocusIn(Window * window = 0);
     void buzz();
+    QMenu * popupMenu();
 signals:
     void bossColor();
     void scrollChanged();
@@ -91,6 +92,7 @@ protected slots:
     void updateBeep(bool);
     void reconnect(bool);
     void keySetup();
+    void printScreen();
 
     void viewImages();
 
@@ -130,11 +132,14 @@ protected:
     QMenu * escapeMenu;
     QMenu * langMenu;
     QMenu * connectMenu;
+
+    QMenu * m_popupMenu;
 //  File
     QAction * m_connectAction;
     QAction * m_disconnectAction;
     QAction * m_addressAction;
     QAction * m_quickConnectAction;
+    QAction * m_printAction;
     QAction * m_exitAction;
 
 //  Edit
@@ -148,8 +153,9 @@ protected:
     QAction * m_escescAction;
     QAction * m_uescAction;
     QAction * m_customescAction;
-    QAction * m_GBKAction;
-    QAction * m_BIG5Action;
+    QAction * m_NoConvAction;
+    QAction * m_S2TAction;
+    QAction * m_T2SAction;
 
     QAction * m_fontAction;
     QAction * m_colorAction;
@@ -217,6 +223,7 @@ protected:
 
     void addMainMenu();
     void addMainTool();
+    void initPopupMenu();
 
     void updateKeyToolBar();
 

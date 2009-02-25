@@ -29,6 +29,10 @@ AUTHOR:        kingson fiasco hooey
 #include "shortcutsdialog.h"
 #include "toolbardialog.h"
 
+#ifdef DBUS_ENABLED
+#include "dbus.h"
+#endif //DBUS_ENABLED
+
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QFrame>
@@ -67,6 +71,9 @@ AUTHOR:        kingson fiasco hooey
 #include <QLineEdit>
 #include <QInputDialog>
 #include <QStatusBar>
+#include <QtGui/QPrinter>
+#include <QtGui/QPrintDialog>
+#include <QtGui/QPainter>
 #include <QtDebug>
 
 namespace QTerm
@@ -87,7 +94,11 @@ Frame::Frame()
     tray = 0;
     trayMenu = 0;
     Global::instance()->setParent(this);
-    connect(Global::instance(), SIGNAL(showQTerm()), this, SLOT(slotShowQTerm()));
+
+#ifdef DBUS_ENABLED
+    DBus::instance()->setParent(this);
+    connect(DBus::instance(), SIGNAL(showQTerm()), this, SLOT(slotShowQTerm()));
+#endif //DBUS_ENABLED
 
 //create a tabbar in the hbox
     tabBar = new QTabBar(statusBar());
@@ -103,6 +114,8 @@ Frame::Frame()
 
 //create the window manager to deal with the window-tab-icon pairs
     wndmgr = new WndMgr(this);
+
+    m_popupMenu = NULL;
 
     initShortcuts();
 
@@ -126,6 +139,8 @@ Frame::Frame()
     enableMenuToolBar(false);
 
     initThemesMenu();
+
+    initPopupMenu();
 
     installEventFilter(this);
 }
@@ -168,10 +183,19 @@ void Frame::iniSetting()
 
     m_noescAction->setChecked(true);
 
-    if (Global::instance()->clipCodec() == Global::GBK) {
-        m_GBKAction->setChecked(true);
-    } else {
-        m_BIG5Action->setChecked(true);
+    switch (Global::instance()->clipConversion()) {
+    case Global::No_Conversion:
+        m_NoConvAction->setChecked(true);
+        break;
+    case Global::Simplified_To_Traditional:
+        m_S2TAction->setChecked(true);
+        break;
+    case Global::Traditional_To_Simplified:
+        m_T2SAction->setChecked(true);
+        break;
+    default:
+        qDebug("ClipboardConversion: we should not be here");
+        break;
     }
 
     if (Global::instance()->scrollPosition() == Global::Hide) {
@@ -286,18 +310,8 @@ void Frame::aboutQTerm()
 //slot Help->Homepage
 void Frame::homepage()
 {
-    QString strCmd = Global::instance()->m_pref.strHttp;
     QString strUrl = "http://www.qterm.org";
-
-    if (strCmd.indexOf("%L") == -1)
-        strCmd += " \"" + strUrl + "\"";
-    else
-        strCmd.replace(QRegExp("%L", Qt::CaseInsensitive), strUrl);
-
-#if !defined(_OS_WIN32_) && !defined(Q_OS_WIN32)
-    strCmd += " &";
-#endif
-    system(strCmd.toLocal8Bit());
+    Global::instance()->openUrl(strUrl);
 }
 
 //slot Windows menu aboutToShow
@@ -502,10 +516,12 @@ void Frame::updateESC(QAction * action)
 
 void Frame::updateCodec(QAction * action)
 {
-    if (action->objectName() == "actionGBK") {
-        Global::instance()->setClipCodec(Global::GBK);
-    } else if (action->objectName() == "actionBig5") {
-        Global::instance()->setClipCodec(Global::Big5);
+    if (action->objectName() == "actionNoConversion") {
+        Global::instance()->setClipConversion(Global::No_Conversion);
+    } else if (action->objectName() == "actionS2T") {
+        Global::instance()->setClipConversion(Global::Simplified_To_Traditional);
+    } else if (action->objectName() == "actionT2S") {
+        Global::instance()->setClipConversion(Global::Traditional_To_Simplified);
     } else {
         qDebug("updateCodec: should not be here");
     }
@@ -550,6 +566,7 @@ void Frame::triggerFullScreen(bool isFullScreen)
         menuBar()->hide();
         mdiTools->hide();
         mdiconnectTools->hide();
+        m_popupMenu->addAction(m_fullAction);
         key->hide();
         //showStatusBar();
         //showSwitchBar();
@@ -558,6 +575,7 @@ void Frame::triggerFullScreen(bool isFullScreen)
         menuBar()->show();
         restoreGeometry(Global::instance()->loadGeometry());
         restoreState(Global::instance()->loadState());
+        m_popupMenu->removeAction(m_fullAction);
         emit scrollChanged();
         showNormal();
         //showStatusBar();
@@ -662,6 +680,21 @@ void Frame::keySetup()
     if (keyDlg.exec() == 1) {
         updateKeyToolBar();
     }
+}
+
+void Frame::printScreen()
+{
+     QPrinter printer(QPrinter::HighResolution);
+     QPrintDialog *dialog = new QPrintDialog(&printer, this);
+     dialog->setWindowTitle(tr("Print Document"));
+     if (dialog->exec() != QDialog::Accepted)
+         return;
+     QPainter painter;
+     painter.begin(&printer);
+     QPixmap screen = QPixmap::grabWidget(wndmgr->activeWindow());
+     QPixmap target = screen.scaled(printer.pageRect().width(),printer.pageRect().height(),Qt::KeepAspectRatio,Qt::SmoothTransformation);
+     painter.drawPixmap(0,0,target);
+     painter.end();
 }
 
 
@@ -810,6 +843,8 @@ void Frame::initActions()
     m_addressAction->setObjectName("actionAddress");
     m_quickConnectAction = new QAction(QPixmap(pathLib + "pic/quick.png"), tr("&Quick Login"), this);
     m_quickConnectAction->setObjectName("actionQuickConnect");
+    m_printAction = new QAction(tr("&Print..."), this);
+    m_printAction->setObjectName("actionPrint");
     m_exitAction = new QAction(tr("&Exit"), this);
     m_exitAction->setObjectName("actionExit");
 
@@ -849,14 +884,18 @@ void Frame::initActions()
     escapeGroup->addAction(m_customescAction);
 
     QActionGroup * codecGroup = new QActionGroup(this);
-    m_GBKAction = new QAction(tr("&GBK"), this);
-    m_GBKAction->setObjectName("actionGBK");
-    m_GBKAction->setCheckable(true);
-    m_BIG5Action = new QAction(tr("&Big5"), this);
-    m_BIG5Action->setObjectName("actionBig5");
-    m_BIG5Action->setCheckable(true);
-    codecGroup->addAction(m_GBKAction);
-    codecGroup->addAction(m_BIG5Action);
+    m_NoConvAction = new QAction(tr("&No Conversion"), this);
+    m_NoConvAction->setObjectName("actionNoConversion");
+    m_NoConvAction->setCheckable(true);
+    m_S2TAction = new QAction(tr("&Simplified to Traditional"), this);
+    m_S2TAction->setObjectName("actionS2T");
+    m_S2TAction->setCheckable(true);
+    m_T2SAction = new QAction(tr("&Traditional to Simplified"), this);
+    m_T2SAction->setObjectName("actionBig5");
+    m_T2SAction->setCheckable(true);
+    codecGroup->addAction(m_NoConvAction);
+    codecGroup->addAction(m_S2TAction);
+    codecGroup->addAction(m_T2SAction);
 
     m_fontAction = new QAction(QPixmap(pathLib + "pic/fonts.png"), tr("&Font"), this);
     m_fontAction->setObjectName("actionFont");
@@ -959,6 +998,7 @@ void Frame::initActions()
     connect(m_disconnectAction, SIGNAL(triggered()), this, SLOT(disconnect()));
     connect(m_addressAction, SIGNAL(triggered()), this, SLOT(addressBook()));
     connect(m_quickConnectAction, SIGNAL(triggered()), this, SLOT(quickLogin()));
+    connect(m_printAction, SIGNAL(triggered()), this, SLOT(printScreen()));
     connect(m_exitAction, SIGNAL(triggered()), this, SLOT(exitQTerm()));
 
     connect(m_copyAction, SIGNAL(triggered()), this, SLOT(copy()));
@@ -1021,6 +1061,8 @@ void Frame::addMainMenu()
     file->addAction(m_addressAction);
     file->addAction(m_quickConnectAction);
     file->addSeparator();
+    file->addAction(m_printAction);
+    file->addSeparator();
     file->addAction(m_exitAction);
 
     //Edit Menu
@@ -1042,9 +1084,10 @@ void Frame::addMainMenu()
     escapeMenu->addAction(m_customescAction);
     edit->addMenu(escapeMenu);
 
-    QMenu * codecMenu = new QMenu(tr("Clipboard &encoding"), this);
-    codecMenu->addAction(m_GBKAction);
-    codecMenu->addAction(m_BIG5Action);
+    QMenu * codecMenu = new QMenu(tr("Clipboard Chinese &Conversion"), this);
+    codecMenu->addAction(m_NoConvAction);
+    codecMenu->addAction(m_S2TAction);
+    codecMenu->addAction(m_T2SAction);
     edit->addMenu(codecMenu);
 
     //View menu
@@ -1126,6 +1169,27 @@ void Frame::addMainMenu()
 
 }
 
+void Frame::initPopupMenu()
+{
+    m_popupMenu = new QMenu(this);
+    m_popupMenu->addAction(m_copyAction);
+    m_popupMenu->addAction(m_pasteAction);
+    m_popupMenu->addAction(m_copyArticleAction);
+    m_popupMenu->addSeparator();
+    m_popupMenu->addAction(m_fontAction);
+    m_popupMenu->addAction(m_colorAction);
+    m_popupMenu->addSeparator();
+    m_popupMenu->addAction(m_currentSessionAction);
+}
+
+QMenu * Frame::popupMenu()
+{
+    if (m_popupMenu == NULL) {
+        initPopupMenu();
+    }
+    return m_popupMenu;
+}
+
 void Frame::updateMenuToolBar()
 {
     Window * window = wndmgr->activeWindow();
@@ -1153,6 +1217,7 @@ void Frame::updateMenuToolBar()
 void Frame::enableMenuToolBar(bool enable)
 {
     m_disconnectAction->setEnabled(enable);
+    m_printAction->setEnabled(enable);
 
     m_copyAction->setEnabled(enable);
     m_pasteAction->setEnabled(enable);
