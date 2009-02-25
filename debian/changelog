@@ -1,8 +1,11 @@
 qterm (1:0.5.4-1) unstable; urgency=low
 
   * new upstream release.
+    - no longer crash under QT4.5 (LP: #332177) 
+  * debian/patches/08_desktop.dpatch: merged by upstream, removed.
+  * debian/patches/00list: updated.
 
- -- LI Daobing <lidaobing@gmail.com>  Wed, 25 Feb 2009 11:56:21 +0800
+ -- LI Daobing <lidaobing@gmail.com>  Wed, 25 Feb 2009 12:04:40 +0800
 
 qterm (1:0.5.3-2) unstable; urgency=low
 
