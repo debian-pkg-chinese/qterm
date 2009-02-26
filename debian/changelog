@@ -1,3 +1,9 @@
+qterm (1:0.5.4-2) unstable; urgency=low
+
+  * debian/qterm.links: add a soft link for the icon (Closes: #517157)
+
+ -- LI Daobing <lidaobing@gmail.com>  Thu, 26 Feb 2009 13:16:31 +0800
+
 qterm (1:0.5.4-1) unstable; urgency=low
 
   * new upstream release.
