@@ -1,3 +1,9 @@
+qterm (1:0.5.4-3) unstable; urgency=low
+
+  * debian/control: change maintainer email.
+
+ -- LI Daobing <lidaobing@debian.org>  Tue, 21 Apr 2009 19:15:34 +0800
+
 qterm (1:0.5.4-2) unstable; urgency=low
 
   * debian/qterm.links: add a soft link for the icon (Closes: #517157)

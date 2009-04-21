@@ -1,7 +1,7 @@
 Source: qterm
 Section: x11
 Priority: optional
-Maintainer: LI Daobing <lidaobing@gmail.com>
+Maintainer: LI Daobing <lidaobing@debian.org>
 Uploaders: Yu Guanghui <ygh@debian.org>
 Build-Depends: cdbs (>= 0.4.51), debhelper (>= 6),
  cmake (>= 2.4.2), libqt4-dev, libssl-dev, dpatch
