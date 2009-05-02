@@ -24,7 +24,6 @@ AUTHOR:        kingson fiasco hooey
 #include "prefdialog.h"
 #include "quickdialog.h"
 #include "keydialog.h"
-#include "trayicon.h"
 #include "imageviewer.h"
 #include "shortcutsdialog.h"
 #include "toolbardialog.h"
@@ -167,7 +166,8 @@ void Frame::iniSetting()
     mdiconnectTools->setVisible(Global::instance()->showToolBar(mdiconnectTools->objectName()));
     key->setVisible(Global::instance()->showToolBar(key->objectName()));
 
-    QStyle * style = QStyleFactory::create(Global::instance()->style());
+    theme = Global::instance()->style();
+    QStyle * style = QStyleFactory::create(theme);
     if (style)
         qApp->setStyle(style);
 
@@ -335,18 +335,27 @@ void Frame::windowsMenuAboutToShow()
     QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
     for (int i = 0; i < int(windows.count()); ++i) {
         QAction * idAction = windowsMenu->addAction(windows.at(i)->windowTitle(),
-                             this, SLOT(windowsMenuActivated(int)));
+                             this, SLOT(windowsMenuActivated()));
+        idAction->setCheckable(true);
         idAction->setData(i);
         idAction->setChecked(m_MdiArea->activeSubWindow() == windows.at(i));
     }
 
 }
 //slot activate the window correspond with the menu id
-void Frame::windowsMenuActivated(int id)
+void Frame::windowsMenuActivated()
 {
-    QWidget* w = m_MdiArea->subWindowList().at(id);
+    QObject * action = sender();
+    if (action == 0) {
+        qDebug("Frame::windowsMenuActivated: No sender found");
+        return;
+    }
+    int id = static_cast<QAction *>(action)->data().toInt();
+    QMdiSubWindow* w = m_MdiArea->subWindowList().at(id);
     if (w) {
-        w->showNormal();
+        w->showMaximized();
+    } else {
+        qDebug() << "Frame::windowsMenuActivated: No window found, id: " << id;
     }
 }
 
@@ -610,8 +619,10 @@ void Frame::themesMenuActivated(QAction * action)
 {
     theme = action->text();
     QStyle * style = QStyleFactory::create(theme);
-    if (style)
+    if (style) {
         qApp->setStyle(style);
+        Global::instance()->setStyle(theme);
+    }
 }
 
 void Frame::updateScroll(QAction * action)

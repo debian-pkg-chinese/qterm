@@ -119,7 +119,6 @@ StateOption Decode::privateState[] = {
 };
 
 Decode::Decode(Buffer * buffer, QTextCodec * codec)
-    :inputData()
 {
     m_pBuffer = buffer;
 
@@ -133,20 +132,22 @@ Decode::Decode(Buffer * buffer, QTextCodec * codec)
 
     bCurMode[MODE_MouseX11] = bSaveMode[MODE_MouseX11] = false;
 
-    m_decoder = codec->makeDecoder();
+    m_decoder = codec;
+    m_state = new QTextCodec::ConverterState;
+    m_attrHack = false;
 }
 
 Decode::~Decode()
 {
-    delete m_decoder;
+    //delete m_decoder;
 }
 
 // precess input string from telnet socket
 //void Decode::ansiDecode( const QCString &cstr, int length )
 void Decode::decode(const char *cstr, int length)
 {
-    inputData = m_decoder->toUnicode(cstr);
-    inputLength = inputData.length();//inputData.length();
+    inputData = cstr;
+    inputLength = length;//inputData.length();
 
     dataIndex = 0;
     m_bBell = false;
@@ -186,16 +187,37 @@ void Decode::decode(const char *cstr, int length)
 // fill letters into char buffer
 void Decode::normalInput()
 {
-    if (inputData[dataIndex] < 0x20 && inputData[dataIndex] >= 0x00)   // not print char
+    if (m_state->remainingChars == 0 && inputData[dataIndex] < 0x20 && inputData[dataIndex] >= 0x00)   // not print char
         return;
-
+    bool fixAttr = false;
+    if (m_state->remainingChars != 0 && m_attrHack) {
+        fixAttr = true;
+        m_attrHack = false;
+    }
+    QString str;
     int n = 0;
-    while ((inputData[dataIndex + n] >= 0x20 || inputData[dataIndex + n] < 0x00)
-            && (dataIndex + n) < inputLength)
+    while ((m_state->remainingChars != 0 || inputData[dataIndex + n] >= 0x20 || inputData[dataIndex + n] < 0x00)
+            && (dataIndex + n) < inputLength) {
+        str += m_decoder->toUnicode(inputData+dataIndex + n, 1, m_state);
         n++;
+        if (m_state->remainingChars != 0 && (dataIndex + n + 1) < inputLength && inputData[dataIndex+n] == CHAR_ESC && inputData[dataIndex+n+1] == '[') {
+            //qDebug("Decode::normalInput: esc sequence in the middle of a char");
+            m_attrHack = true;
+            break;
+        }
+    }
 
-    QString str = inputData.mid(dataIndex, n);
+    //QByteArray cstr(inputData + dataIndex, n);
+    //QString str = m_decoder->toUnicode(inputData+dataIndex, n, m_state);
     m_pBuffer->setBuffer(str, n);
+    if (fixAttr == true) {
+        //qDebug("Decode::normalInput: load attr");
+        m_pBuffer->restoreAttr();
+    }
+    if (m_attrHack == true) {
+        //qDebug("Decode::normalInput: save attr");
+        m_pBuffer->saveAttr();
+    }
 
     n--;
     dataIndex += n;
@@ -263,7 +285,7 @@ void Decode::paramDigit()
     // make stream into number
     // ( e.g. this input character is '1' and this param is 4
     // after the following sentence this param is changed to 41
-    param[nParam] = param[nParam] * 10 + inputData[dataIndex].digitValue();
+    param[nParam] = param[nParam] * 10 + inputData[dataIndex] - '0';
 }
 
 void Decode::nextParam()

@@ -23,6 +23,9 @@ namespace QTerm
 {
 class Config;
 class Convert;
+#ifdef KWALLET_ENABLED
+class Wallet;
+#endif //KWALLET_ENABLED
 class Global : public QObject
 {
     Q_OBJECT
@@ -74,6 +77,7 @@ public:
     QStringList loadNameList();
     bool loadAddress(int n, Param & param);
     void saveAddress(int n, const Param & param);
+    void removeAddress(int n);
     QString getOpenFileName(const QString & filter, QWidget * widget);
     QString getSaveFileName(const QString & filename, QWidget * widget);
     bool isOK();
@@ -140,6 +144,9 @@ private:
     bool m_switchBar;
     Language m_language;
     QMap<QString, bool> m_showToolBar;
+#ifdef KWALLET_ENABLED
+    Wallet * m_wallet;
+#endif // KWALLET_ENABLED
 };
 
 } // namespace QTerm

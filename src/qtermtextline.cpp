@@ -42,8 +42,6 @@ void TextLine::insertText(const QString & str, short attribute, int index)
     // set attribute
     if (attribute != -1) {
         m_curColor = GETCOLOR(attribute);
-        if (m_curColor == '\0')
-            m_curColor = NO_COLOR;
         m_curAttr  = GETATTR(attribute);
         if (m_curAttr == '\0')
             m_curAttr = NO_ATTR;
@@ -109,8 +107,6 @@ void TextLine::replaceText(const QString & str, short attribute, int index, int 
     }
     if (attribute != -1) {
         m_curColor = GETCOLOR(attribute);
-        if (m_curColor == '\0')
-            m_curColor = NO_COLOR;
         m_curAttr  = GETATTR(attribute);
         if (m_curAttr == '\0')
             m_curAttr = NO_ATTR;
@@ -136,7 +132,7 @@ void TextLine::replaceText(const QString & str, short attribute, int index, int 
     if (len == -1)   // replace with  str
         len = newlen;
 
-    if (index + len >= m_length) {
+    if (index + len > m_length) {
         //qDebug() << "index: " << index << " len: " << len << " string: " << str;
         m_text.replace(index, len, str);
 
@@ -154,20 +150,27 @@ void TextLine::replaceText(const QString & str, short attribute, int index, int 
 
         m_length = m_text.length();
 
+        //if ( m_color.length() != m_text.length()) {
+        //    qDebug() << "=================================color length: " << m_color.length() << ", tmp: " << tmp.length() << ", old length: " << tmplen;
+        //}
+
     } else {
         //qDebug() << "string : " << m_text.string() << " old length: " << m_text.length();
         //qDebug() << "index: " << index << " len: " << len << " string: " << str;
         m_text.replace(index, len, str);
         //qDebug() << "new length: " << m_text.length() << "," << newlen;
+        int delta = m_length - m_text.length();
 
         setChanged(index, qMax(m_length, m_text.length()));
 
-        m_length = m_text.length();
-
         tmp.fill(m_curColor, len);
-        m_color.replace(index, len, tmp);
+        m_color.replace(index, len + delta, tmp);
+        //if ( m_color.length() != m_text.length()) {
+        //    qDebug() << "=======================color length: " << m_color.length() << ", tmp: " << tmp.length();
+        //}
         tmp.fill(m_curAttr, len);
-        m_attr.replace(index, len, tmp);
+        m_attr.replace(index, len + delta, tmp);
+        m_length = m_text.length();
     }
 }
 
@@ -202,6 +205,9 @@ void TextLine::deleteText(int index, int len)
 // if len == -1, get the rest from index
 QString TextLine::getText(int index, int len)
 {
+    if (m_text.isEmpty()||len == 0) {
+        return QString();
+    }
     QString str;
 
     if (index == -1)
@@ -294,7 +300,7 @@ bool TextLine::hasBlink()
 
     //qDebug() << "m_length: " << m_length << " m_attr " << m_attr.length();
     char tempea;
-    for (int i = 0; i < m_length; i++) {
+    for (int i = 0; i < m_length && i < m_attr.length(); i++) {
         tempea = m_attr.at(i);
         if (GETBLINK(tempea)) {
             blink = true;
@@ -346,9 +352,24 @@ int TextLine::size(int index)
     return m_text.size(index);
 }
 
+int TextLine::pos(int index)
+{
+    return m_text.pos(index);
+}
+
 bool TextLine::isPartial(int index)
 {
     return m_text.isPartial(index);
+}
+
+void TextLine::setAttr(short attr, int index)
+{
+    char tmpColor = GETCOLOR(attr);
+    char tmpAttr  = GETATTR(attr);
+    if (tmpAttr == '\0')
+        tmpAttr = NO_ATTR;
+    m_color[index] = tmpColor;
+    m_attr[index] = tmpAttr;
 }
 
 } // namespace QTerm
