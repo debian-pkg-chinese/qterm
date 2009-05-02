@@ -32,33 +32,34 @@ class Buffer;
 class BBS;
 class Param;
 // class Q3Accel;
-/*
-class QTermInput : public QWidget
+
+class Input : public QWidget
 {
- Q_OBJECT
+    Q_OBJECT
 public:
- QTermInput(QWidget * parent, int width, int height, int ascent)
-  :QWidget(parent),d_text(0),d_pos(0),d_height(height), d_width(width), d_ascent(ascent)
- {
- }
- ~QTermInput()
- {
- }
- void drawInput(QString & text, int position);
+    Input(QWidget * parent, int width, int height, int ascent)
+        :QWidget(parent),d_text(0),d_pos(0),d_height(height), d_width(width), d_ascent(ascent)
+    {
+    }
+    ~Input()
+    {
+    }
+    void drawInput(QInputMethodEvent * );
 protected:
- void paintEvent( QPaintEvent * );
+    void paintEvent( QPaintEvent * );
 private:
- QString d_text;
- int d_pos;
- int d_height, d_width, d_ascent;
+    QString d_text;
+    int d_pos;
+    int d_height, d_width, d_ascent;
 };
-*/
+
 class Screen : public QWidget
 {
     Q_OBJECT
 public:
     enum PaintState {NewData, Blink, Cursor, Repaint, Show};
     enum MouseState {Enter, Press, Move, Release, Leave};
+    enum CharFlags {RenderAll, RenderLeft, RenderRight};
     Screen(QWidget *parent, Buffer *buffer, Param *param, BBS *bbs);
     ~Screen();
 
@@ -73,6 +74,7 @@ public:
     void blinkScreen();
     void updateCursor();
     void repaintScreen(QPaintEvent * pe);
+    void updateFont();
     PaintState m_ePaintState;
 
 signals:
@@ -108,7 +110,7 @@ protected:
 
     // display
     void eraseRect(QPainter& , int, int, int, int, short);
-    void drawStr(QPainter&, const QString&, int, int, int, short, bool);
+    void drawStr(QPainter&, const QString&, int, int, int, short, bool, CharFlags);
     void drawLine(QPainter&, int index, int beginx = -1, int endx = -1, bool complete = true);
     void drawCaret(QPainter&, bool);
     void drawMenuSelect(QPainter&, int);
@@ -127,7 +129,6 @@ protected:
     QRect mapToRect(int, int, int, int);
     QRect mapToRect(const QRect&);
 
-    void updateFont();
     void getFontMetrics(QFontMetrics *);
 
     QImage& fade(QImage&, float, const QColor&);
@@ -159,7 +160,7 @@ protected:
 
     QTimer * m_blinkTimer;
     QTimer * m_cursorTimer;
-    //QTermInput * m_inputContent;
+    Input * m_inputContent;
 
     bool m_blinkScreen;
     bool m_blinkCursor;
@@ -176,6 +177,7 @@ protected:
     //QPixmap * m_pCanvas;
 
     int m_nCharAscent, m_nCharDescent, m_nCharWidth, m_nCharHeight;
+    int m_nCharDelta;
     int m_nLineSpacing; // for future
 
     bool * m_pBlinkLine;

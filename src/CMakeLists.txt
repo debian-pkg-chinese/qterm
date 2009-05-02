@@ -1,6 +1,5 @@
 set(optionalLibs)
 set(optionalSources)
-set(win32Libs libwsock32.a)
 option(QTERM_ENABLE_SSH "Build SSH Support" ON)
 option(QTERM_ENABLE_DBUS "Build DBus Support" ON)
 option(QTERM_ENABLE_PHONON "Build Phonon Support" ON)
@@ -29,6 +28,13 @@ if(QTERM_ENABLE_DBUS)
       include_directories(${QT_QTDBUS_INCLUDE_DIR})
       set(optionalLibs ${optionalLibs} ${QT_QTDBUS_LIBRARY})
       set(optionalSources ${optionalSources} dbus.cpp)
+      find_file(KWALLET_XML org.kde.KWallet.xml ${KDE4_DBUS_INTERFACES_DIR} ${DBUS_INTERFACES_INSTALL_DIR})
+      if(KWALLET_XML)
+         message(STATUS "KWallet found, enable KWallet support")
+         add_definitions(-DKWALLET_ENABLED)
+         qt4_add_dbus_interface(optionalSources ${KWALLET_XML} kwallet_interface )
+         set(optionalSources ${optionalSources} wallet.cpp)
+      endif(KWALLET_XML)
    endif(QT_QTDBUS_FOUND)
 endif(QTERM_ENABLE_DBUS)
 if(QTERM_ENABLE_PHONON)
@@ -135,13 +141,14 @@ if(WIN32)
   else(MINGW)
     SET(qterm_SRCS ${qterm_SRCS} qterm.rc)
   endif(MINGW)
+  find_library(WIN32_WS2_LIBRARY NAMES ws2_32)
+  if(WIN32_WS2_LIBRARY)
+    set(optionalLibs ${optionalLibs} ${WIN32_WS2_LIBRARY})
+  endif(WIN32_WS2_LIBRARY)
 endif(WIN32)
 qt4_wrap_ui(qterm_UIS_H ${qterm_UIS})
 qt4_automoc(${qterm_SRCS})
-add_definitions( -Wall -DHAVE_CONFIG_H )
-if(WIN32 AND MINGW)
-   set(CMAKE_CXX_FLAGS -mwindows)
-endif(WIN32 AND MINGW)
+add_definitions( -DHAVE_CONFIG_H )
 include_directories(
    ${QT_INCLUDE_DIR}
    ${QT_QTCORE_INCLUDE_DIR}
@@ -151,7 +158,11 @@ include_directories(
    ${CMAKE_BINARY_DIR}
    ${CMAKE_CURRENT_BINARY_DIR}
    ${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(qterm ${qterm_SRCS})
+if(WIN32)
+   add_executable(qterm WIN32 ${qterm_SRCS})
+else(WIN32)
+   add_executable(qterm ${qterm_SRCS})
+endif(WIN32)
 target_link_libraries(qterm
    ${QT_LIBRARIES}
    ${QT_QTCORE_LIBRARY}

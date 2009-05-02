@@ -283,8 +283,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_pFrame, SIGNAL(bossColor()), m_pScreen, SLOT(bossColor()));
     connect(m_pFrame, SIGNAL(scrollChanged()), m_pScreen, SLOT(updateScrollBar()));
     connect(m_pScreen, SIGNAL(inputEvent(QString *)), this, SLOT(inputHandle(QString *)));
-    connect(m_pZmodem, SIGNAL(ZmodemState(int, int, const QByteArray&)),
-            this, SLOT(ZmodemState(int, int, const QByteArray&)));
+    connect(m_pZmodem, SIGNAL(ZmodemState(int, int, const QString&)),
+            this, SLOT(ZmodemState(int, int, const QString&)));
     connect(m_pZmDialog, SIGNAL(canceled()), m_pZmodem, SLOT(zmodemCancel()));
 
     connect(m_pDecode, SIGNAL(mouseMode(bool)), this, SLOT(setMouseMode(bool)));
@@ -334,6 +334,9 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_reconnectTimer, SIGNAL(timeout()), this, SLOT(reconnect()));
     m_ipTimer = new QTimer;
     connect(m_ipTimer, SIGNAL(timeout()), this, SLOT(showIP()));
+    m_updateTimer = new QTimer;
+    m_updateTimer->setSingleShot(true);
+    connect(m_updateTimer, SIGNAL(timeout()), this, SLOT(updateProcess()));
 
 
 // initial varibles
@@ -439,6 +442,7 @@ Window::~Window()
     delete m_idleTimer;
     delete m_replyTimer;
     delete m_tabTimer;
+    delete m_updateTimer;
 
     delete m_pUrl;
     delete m_pScreen;
@@ -543,6 +547,12 @@ void Window::blinkTab()
     static bool bVisible = TRUE;
     m_pFrame->wndmgr->blinkTheTab(this, bVisible);
     bVisible = !bVisible;
+}
+
+void Window::updateProcess()
+{
+// set page state
+    m_pBBS->updateUrlList();
 }
 
 /* ------------------------------------------------------------------------ */
@@ -651,20 +661,12 @@ void Window::mouseMoveEvent(QMouseEvent * me)
         if (Global::instance()->m_pref.bUrl) {
             if (m_pBBS->isIP(rcUrl_leave_me_alone, rcOld_i_dont_need_you) && m_bCheckIP) {
                 if (rcUrl_leave_me_alone != rcOld_i_dont_need_you) {
-//      QString country,city;
-//      QString url = m_pBBS->getIP();
-//      if (m_pIPLocation->getLocation(url, country, city)) {
-//       statusBar()->message( G2U(country + city) );
-//       //m_pMessage->display(G2U(country + city), PageViewMessage::Info, 0);
-//      }
                     if (!m_ipTimer->isActive()) {
                         m_ipTimer->setSingleShot(false);
                         m_ipTimer->start(100);
                     }
                 }
             } else {
-                //statusBar()->message("");
-                //m_pMessage->hide();
                 if (m_ipTimer->isActive())
                     m_ipTimer->stop();
             }
@@ -672,15 +674,9 @@ void Window::mouseMoveEvent(QMouseEvent * me)
             if (m_pBBS->isUrl(m_rcUrl, rcOld)) {
                 setCursor(Qt::PointingHandCursor);
                 if (m_rcUrl != rcOld) {
-                    //QToolTip::remove(this, m_pScreen->mapToRect(rcOld));
-                    //QToolTip::add(this, m_pScreen->mapToRect(m_rcUrl), m_pBBS->getUrl());
                 }
                 bUrl = true;
             }
-            //else
-            //QToolTip::remove(this, m_pScreen->mapToRect(rcOld));
-
-
         }
 
         if (!bUrl) {
@@ -941,7 +937,7 @@ void Window::readReady(int size)
     // read raw buffer
     m_pZmodem->ZmodemRcv((uchar *)raw_str, raw_size, &(m_pZmodem->info));
 
-    if (m_pZmodem->transferstate == notransfer) {
+    if (m_pZmodem->transferstate == NoTransfer) {
         //decode
         m_pDecode->decode(str, size);
 
@@ -1028,8 +1024,8 @@ void Window::readReady(int size)
     //m_pFrame->buzz();
 }
 
-// set page state
 m_pBBS->setPageState();
+m_updateTimer->start(100);
 //refresh screen
 m_pScreen->m_ePaintState = Screen::NewData;
 m_pScreen->update();
@@ -1044,8 +1040,8 @@ pythonCallback("dataEvent", Py_BuildValue("(l)", this));
 delete []str;
 delete []raw_str;
 
-if (m_pZmodem->transferstate == transferstop)
-    m_pZmodem->transferstate = notransfer;
+if (m_pZmodem->transferstate == TransferStop)
+    m_pZmodem->transferstate = NoTransfer;
 }
 
 void Window::ZmodemState(int type, int value, const QString& status)
@@ -1416,7 +1412,12 @@ void Window::setting()
     if (set.exec() == 1) {
         m_param = set.param;
         m_bSetChanged = true;
-
+        if (m_param.m_bAutoFont) {
+            m_pBuffer->setSize(m_param.m_nCol, m_param.m_nRow);
+            m_pScreen->updateFont();
+            m_pScreen->m_ePaintState = Screen::Show;
+            m_pScreen->update();
+        }
     }
 }
 

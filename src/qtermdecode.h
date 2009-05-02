@@ -2,7 +2,6 @@
 #define QTERMDECODE_H
 
 #include <QtCore/QObject>
-#include <QtCore/QString>
 
 class QTextDecoder;
 
@@ -98,7 +97,7 @@ private:
     static StateOption normalState[], escState[], bracketState[], privateState[];
 
     // ********** decoder  *****************
-    QString inputData;
+    const char *inputData;
     int inputLength, dataIndex;
 
     int nParam, param[30];
@@ -109,9 +108,12 @@ private:
 
     Buffer * m_pBuffer;
 
-    QTextDecoder * m_decoder;
+    QTextCodec * m_decoder;
+    QTextCodec::ConverterState * m_state;
+    //bool CheckESCState(char next);
 
     bool m_test;
+    bool m_attrHack;
 };
 
 } // namespace QTerm

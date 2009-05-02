@@ -64,6 +64,7 @@ Screen::Screen(QWidget *parent, Buffer *buffer, Param *param, BBS *bbs)
     //m_pCanvas = NULL;
     m_ePaintState = Repaint;
     m_bCursor = true;
+    m_inputContent = NULL;
 
     setFocusPolicy(Qt::ClickFocus);
     setAttribute(Qt::WA_InputMethodEnabled, true);
@@ -115,7 +116,7 @@ Screen::~Screen()
     delete m_blinkTimer;
     delete m_cursorTimer;
     //delete m_pCanvas;
-    //delete m_inputContent;
+    delete m_inputContent;
 }
 
 // focus event received
@@ -356,12 +357,20 @@ void Screen::updateFont()
             break;
         }
     }
-    int marginw = (m_rcClient.width() - (m_pBuffer->columns()*m_nCharWidth))/2;
-    int marginh = (m_rcClient.height() - (m_pBuffer->line()*m_nCharHeight))/2;
+    int marginw,marginh;
+    marginw=marginh=0;
+    if (Frame::instance()->isMaximized()) {
+        marginw = (m_rcClient.width() - (m_pBuffer->columns()*m_nCharWidth))/2;
+        marginh = (m_rcClient.height() - (m_pBuffer->line()*m_nCharHeight))/2;
+    }
     QPoint point = m_rcClient.topLeft();
     m_rcClient = QRect(point.x()+marginw, point.y()+marginh, m_pBuffer->columns()*m_nCharWidth, m_pBuffer->line()*m_nCharHeight);
     m_pFont->setWeight(QFont::Normal);
     m_pFont->setStyleStrategy(Global::instance()->m_pref.bAA ? QFont::PreferAntialias : QFont::NoAntialias);
+    if (m_inputContent != NULL) {
+        delete m_inputContent;
+        m_inputContent = NULL;
+    }
 }
 
 void Screen::getFontMetrics(QFontMetrics *fm)
@@ -373,6 +382,7 @@ void Screen::getFontMetrics(QFontMetrics *fm)
     else
         m_nCharWidth = (qMax(en, cn) + 1) / 2;
 
+    m_nCharDelta = m_nCharWidth - cn/2;
     m_nCharHeight = fm->height();
     m_nCharAscent = fm->ascent();
     m_nCharDescent = fm->descent();
@@ -681,6 +691,7 @@ void Screen::blinkScreen()
                     startx = i;
                     while (i < linelength && GETBLINK(attr.at(i)))
                         ++i;
+                    --i;
                     drawLine(painter, index, startx, i, false);
                 }
             }
@@ -806,14 +817,13 @@ void Screen::repaintScreen(QPaintEvent * pe)
 
 //  qDebug("rcClient: %d, %d", m_pCanvas->width(),m_pCanvas->height());
 
+    painter.eraseRect(pe->rect());
+
     QRect rect = pe->rect() & m_rcClient;
-
-    if (rect.isEmpty()) {
-        painter.eraseRect(pe->rect());
+    if (rect.isEmpty())
         return;
-    }
 
-    painter.eraseRect(rect);
+    //painter.eraseRect(rect);
 
     QPoint tlPoint = mapToChar(QPoint(rect.left(), rect.top()));
 
@@ -858,7 +868,10 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
         beginx = 0;
 
     if (endx >= linelength || endx < 0)
-        endx = linelength-1;
+        endx = qMin(m_pBuffer->columns(), linelength)-1;
+    if (endx >= qMin(color.size(), attr.size())) {
+        endx = qMin(color.size(), attr.size()) -1;
+    }
 
     if (beginx >= linelength) {
         //qDebug("Screen::drawLine: wrong position: %d(%d)", beginx, linelength);
@@ -890,15 +903,13 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
             tempea = attr.at(i);
         bSelected = m_pBuffer->isSelected(QPoint(i, index), m_pWindow->m_bCopyRect);
         len = pTextLine->size(i);
+        if ( (i+1) >= linelength) {
+            len = 1;
+        }
         if (len <= 0) {
             qDebug("drawLine: non printable char");
             continue;
         }
-        if (tempcp != color.at(i+len-1) || tempea != attr.at(i+len-1) || bSelected != m_pBuffer->isSelected(QPoint(i+len-1, index), m_pWindow->m_bCopyRect)) {
-            //TODO: draw half char
-            qDebug("drawLine: not implemented yet");
-        }
-        // get str of the same attribute
 
         if (bSelected) // selected area is text=color(0) background=color(7)
             tempattr = SETCOLOR(SETFG(0) | SETBG(7)) | SETATTR(NO_ATTR);
@@ -912,22 +923,36 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
         // TODO: Rewrite this when we want to do more than char to char convert
         strShow = Global::instance()->convert(pTextLine->getText(startx, len), (Global::Conversion)m_pParam->m_nDispCode);
 
-
+        if (strShow.isEmpty()) {
+            qDebug("drawLine: empty string?");
+            continue;
+        }
         // Draw Charactors one by one to fix the variable font display problem
         int charWidth = TermString::wcwidth(strShow.at(0));
         if (charWidth <= 0) {
             qDebug("drawLine: non printable char");
             continue;
         }
-        drawStr(painter, (QString)strShow.at(0), startx, index, charWidth, tempattr, bSelected);
+        CharFlags flags = RenderAll;
+        if ( pTextLine->isPartial(startx) ) {
+            flags = RenderRight;
+        } else if ( charWidth == 2) {
+            if (tempcp != color.at(i+1) || tempea != attr.at(i+1) || bSelected != m_pBuffer->isSelected(QPoint(i+1, index), m_pWindow->m_bCopyRect)) {
+                charWidth = 1;
+                flags = RenderLeft;
+            } else {
+                ++i;
+            }
+        }
+        drawStr(painter, (QString)strShow.at(0), startx, index, charWidth, tempattr, bSelected, flags);
 
-        i += (len-1);
+        //i += (len-1);
     }
 }
 
 // draw functions
 void Screen::drawStr(QPainter& painter, const QString& str, int x, int y, int length,
-                     short attribute, bool transparent)
+                     short attribute, bool transparent, CharFlags flags)
 {
     char cp = GETCOLOR(attribute);
     char ea = GETATTR(attribute);
@@ -970,7 +995,7 @@ void Screen::drawStr(QPainter& painter, const QString& str, int x, int y, int le
         else
             painter.setBackgroundMode(Qt::TransparentMode);
         painter.setBackground(GETBG(cp) == 7 ? Qt::black : Qt::white);
-        painter.drawText(pt.x(), pt.y() + m_nCharAscent, str);
+        painter.drawText(pt.x(), pt.y(), m_nCharWidth*length, m_nCharHeight, flags, str);
         return;
     }
 
@@ -992,7 +1017,14 @@ void Screen::drawStr(QPainter& painter, const QString& str, int x, int y, int le
     } else {
         if (GETBG(cp) != 0 || m_ePaintState == Cursor)
             painter.fillRect(mapToRect(x, y, length, 1), QBrush(m_color[GETBG(cp)]));
-        painter.drawText(pt.x(), pt.y() + m_nCharAscent, str);
+        if (flags == RenderAll) {
+            painter.drawText(pt.x()+m_nCharDelta, pt.y(), m_nCharWidth*length, m_nCharHeight, Qt::AlignLeft, str);
+        } else if (flags == RenderLeft) {
+            painter.drawText(pt.x()+m_nCharDelta, pt.y(), m_nCharWidth-m_nCharDelta, m_nCharHeight, Qt::AlignLeft, str);
+        } else if (flags == RenderRight) {
+            int width = painter.fontMetrics().width(str[0])-m_nCharWidth+m_nCharDelta;
+            painter.drawText(pt.x(), pt.y(), width, m_nCharHeight, Qt::AlignRight, str);
+        }
     }
 }
 
@@ -1107,9 +1139,9 @@ QRect Screen::mapToRect(int x, int y, int width, int height)
     QPoint pt = mapToPixel(QPoint(x, y));
 
     if (width == -1)  // to the end
-        return QRect(pt.x(), pt.y(), size().width() , m_nCharHeight*height);
+        return QRect(pt.x()+m_nCharDelta, pt.y(), size().width() , m_nCharHeight*height);
     else
-        return QRect(pt.x(), pt.y(), width*m_nCharWidth, m_nCharHeight*height);
+        return QRect(pt.x()+m_nCharDelta, pt.y(), width*m_nCharWidth, m_nCharHeight*height);
 }
 
 QRect Screen::mapToRect(const QRect& rect)
@@ -1187,8 +1219,32 @@ QImage& Screen::fade(QImage& img, float val, const QColor& color)
 
 void Screen::inputMethodEvent(QInputMethodEvent * e)
 {
-    QString text = e->commitString();
-    emit inputEvent(&text);
+    QString commitString = e->commitString();
+    if (!commitString.isEmpty()) {
+        emit inputEvent(&commitString);
+    }
+    QString preeditString = e->preeditString();
+    if (m_inputContent == NULL){
+        m_inputContent = new Input(this, m_nCharWidth, m_nCharHeight, m_nCharAscent);
+        m_inputContent->setFont(*m_pFont);
+    }
+    if (preeditString.isEmpty()) {
+        m_inputContent->hide();
+    } else {
+        m_inputContent->drawInput(e);
+        QPoint cursor;
+        int x = m_pBuffer->caretX();
+        int y = m_pBuffer->caretY();
+        cursor = mapToPixel(QPoint(x+1,y));
+
+        if (m_inputContent->width() + cursor.x() > m_rcClient.width()){
+            cursor = mapToPixel(QPoint(x,y));
+            cursor.setX(m_rcClient.right() - m_inputContent->width());
+        }else
+            cursor = mapToPixel(QPoint(x,y));
+        m_inputContent->show();
+        m_inputContent->move(cursor);
+    }
 }
 
 QVariant Screen::inputMethodQuery(Qt::InputMethodQuery property) const
@@ -1206,133 +1262,75 @@ QVariant Screen::inputMethodQuery(Qt::InputMethodQuery property) const
         return QVariant();
     }
 }
-/*
-void Screen::imStartEvent(QIMEvent * e)
-{
- //m_inputContent = new QTermInput(this, m_nCharWidth, m_nCharHeight, m_nCharAscent);
- //m_inputContent->setFont(*m_pFont);
- //m_inputContent->setTextFormat(Qt::RichText);
 
- //m_inputContent->show();
+void Input::drawInput(QInputMethodEvent * e)
+{
+    int cursorPos = -1;
+    foreach (QInputMethodEvent::Attribute attribute, e->attributes()) {
+        switch (attribute.type) {
+            case QInputMethodEvent::TextFormat:
+                //FIXME: text format?
+                break;
+            case QInputMethodEvent::Cursor:
+                if (attribute.length == 0) {
+                    cursorPos = -1;
+                } else {
+                    cursorPos = attribute.start;
+                }
+                break;
+            case QInputMethodEvent::Language:
+                break;
+            case QInputMethodEvent::Ruby:
+                break;
+            default:
+                qDebug("Unknown attribute");
+                break;
+        }
+    }
+
+    d_text = e->preeditString();
+    d_pos = cursorPos;
+    repaint();
 }
 
-void Screen::imComposeEvent(QIMEvent * e)
+void Input::paintEvent(QPaintEvent * e)
 {
- if (m_inputContent == NULL){
-  m_inputContent = new QTermInput(this, m_nCharWidth, m_nCharHeight, m_nCharAscent);
-  m_inputContent->setFont(*m_pFont);
-  m_inputContent->show();
- }
- QString text = QString::null;
+    QPainter inputPainter;
+    int len = 0;
+    int cursor = 0;
+    int width, height;
 
- QPoint cursor;
- int x = m_pBuffer->caretX();
- int y = m_pBuffer->caretY();
- int pos = e->cursorPos();
+    if (d_pos == -1 || d_pos >= d_text.length())
+        d_pos = 0;
+    for (int i = 0; i < d_text.length(); ++i) {
+        if (i == d_pos)
+            cursor = len;
+        len += TermString::wcwidth(d_text[i]);
+    }
 
- text += e->text();
-// how dirty
-#ifdef Q_OS_MACX
-ushort code=text[text.length()-1].unicode();
-if( (code>0xff00&&code<0xffef) ||
-(code>0x3000&&code<0x303f) ||
-(code>0x2000&&code<0x206f) ||
-code==0x00b7)
-{
-emit inputEvent(&text);
-return;
+    width = len * d_width;
+    height = d_height;
+
+    inputPainter.begin(this);
+    setFixedSize(width,height);
+    inputPainter.eraseRect(rect());
+
+    len = 0;
+    inputPainter.setPen(Qt::black);
+
+    for (int j = 0; j < d_text.length(); ++j) {
+        if (j == d_pos) {
+            QRect rcCurrent(len * d_width, 0, d_width*TermString::wcwidth(d_text[d_pos]), d_height);
+            inputPainter.fillRect(rcCurrent, QBrush(Qt::darkGray));
+            inputPainter.setPen(Qt::white);
+            inputPainter.drawText(len * d_width ,d_ascent, d_text.mid(d_pos, 1));
+        } else {
+            inputPainter.drawText(len * d_width, d_ascent, d_text.mid(j, 1));
+        }
+        len += TermString::wcwidth(d_text[j]);
+    }
+    inputPainter.end();
 }
-#endif
- m_inputContent->drawInput(text, pos);
-
- QString text_before = text.left(pos);
- QString text_after = text.mid(pos + 1);
- QString text_select = "<u>" + text.mid(pos,1) + "</u>";
-
- text = text_before + text_select + text_after;
-
- cursor = mapToPixel(QPoint(x+1,y));
-
- //m_inputContent->setText(text);
- //m_inputContent->adjustSize();
-
- if (m_inputContent->width() + cursor.x() > m_rcClient.width()){
-  cursor = mapToPixel(QPoint(x,y));
-  cursor.setX(m_rcClient.right() - m_inputContent->width());
- }else
-  cursor = mapToPixel(QPoint(x,y));
- m_inputContent->move(cursor);
-}
-
-void Screen::imEndEvent(QIMEvent * e)
-{
- QString text = QString::null;
- text += e->text();
- //m_inputContent->setText(QString::null);
- delete m_inputContent;
- m_inputContent = NULL;
- emit inputEvent(&text);
-}
-*/
-/*
-void QTermInput::drawInput(QString & inputText, int position)
-{
- d_text = inputText;
- d_pos = position;
- repaint();
-}
-
-void QTermInput::paintEvent(QPaintEvent * e)
-{
- QPainter inputPainter;
- int len = 0;
- int cursor = 0;
- int width, height;
-
- if (d_pos == -1 || d_pos >= d_text.length())
-  d_pos = 0;
- for (int i = 0; i < d_text.length(); ++i) {
-  if (d_text[i] <= 0x7f) {
-   ++len;
-   if (i == d_pos)
-    cursor = len - 1;
-  }
-  else {
-   len += 2;
-   if (i == d_pos)
-    cursor = len - 2;
-  }
- }
-
- width = len * d_width;
- height = d_height;
-
- inputPainter.begin(this);
- setFixedSize(width,height);
- erase();
-
- len = 0;
- inputPainter.setPen(Qt::black);
- //inputPainter.drawText(0 ,m_nCharAscent, text);
-
- for (int j = 0; j < d_text.length(); ++j) {
-  inputPainter.drawText(len * d_width, d_ascent, d_text.mid(j, 1));
-  if (d_text[j] <= 0x7f)
-   ++len;
-  else
-   len += 2;
- }
-#ifndef Q_OS_MACX
- QRect rcCurrent(cursor * d_width, 0, d_width*2, d_height);
- if (d_text[d_pos] <= 0x7f)
-  rcCurrent.setRect(cursor * d_width, 0, d_width, d_height);
- erase(rcCurrent);
- inputPainter.fillRect(rcCurrent, QBrush(Qt::darkGray));
- inputPainter.setPen(Qt::white);
- inputPainter.drawText(cursor * d_width ,d_ascent, d_text.mid(d_pos, 1));
-#endif
- inputPainter.end();
-}*/
 
 } // namespace QTerm
 

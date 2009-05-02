@@ -44,6 +44,10 @@ Buffer::Buffer(int line, int column, int limit)
     m_oldCaretX = 0;
     m_oldCaretY = 0;
 
+    m_tmpX = 0;
+    m_tmpY = 0;
+    m_tmpAttr = 0;
+
 
     m_top = 0;
     m_bottom = m_lin - 1;
@@ -135,6 +139,23 @@ void Buffer::setBuffer(const QString & str, int n)
         line->replaceText(str, m_curAttr, m_caretX);
 // FIXME: optimization
     moveCursorOffset(TermString(str).length(), 0);
+}
+
+void Buffer::saveAttr()
+{
+    m_tmpAttr = m_curAttr;
+    m_tmpX = m_caretX;
+    m_tmpY = m_caretY;
+}
+
+void Buffer::restoreAttr()
+{
+    TextLine * line =  m_lineList.value(m_lines + m_tmpY, NULL);
+    if (line == NULL) {
+        qWarning("setBuffer null line");
+        return;
+    }
+    line->setAttr(m_tmpAttr, m_tmpX);
 }
 
 //nextline
