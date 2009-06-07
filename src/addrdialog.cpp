@@ -96,7 +96,7 @@ void addrDialog::onNamechange(int item)
 	if(isChanged())
 	{
 		QMessageBox mb( "QTerm",
-			"Setting changed, do you want to save?",
+			tr("Setting changed, do you want to save?"),
 			QMessageBox::Warning,
 			QMessageBox::Yes | QMessageBox::Default,
 			QMessageBox::No  | QMessageBox::Escape ,
@@ -204,7 +204,7 @@ void addrDialog::onConnect()
 	if(isChanged())
 	{
 		QMessageBox mb( "QTerm",
-			"Setting changed, do you want to save?",
+			tr("Setting changed, do you want to save?"),
 			QMessageBox::Warning,
 			QMessageBox::Yes | QMessageBox::Default,
 			QMessageBox::No  | QMessageBox::Escape ,
@@ -271,7 +271,7 @@ void addrDialog::onProtocol(int n)
 #ifndef SSH_ENABLED
 	if (n == 1)
 	{
-		QMessageBox::warning(this, "sorry", "SSH support is not compiled, check your OpenSSL and try to recompile QTerm");
+		QMessageBox::warning(this, "QTerm", tr("SSH support is not compiled, check your OpenSSL and try to recompile QTerm"));
 		ui.protocolComboBox->setCurrentIndex(0);
 	}
 #endif
@@ -281,21 +281,21 @@ void addrDialog::onChooseScript()
 {
 	QString path;
 #if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
-	path=Global::instance()->pathLib()+"script";
+	path=Global::instance()->pathLib()+"scripts";
 #else
-	path=Global::instance()->pathCfg()+"script";
+	path=Global::instance()->pathCfg()+"scripts";
 #endif
 	
 	QString strFile = QFileDialog::getOpenFileName(
 							this, "choose a script file",
-							path, "Python File (*.py)");
+							path, "Script Files (*.js)");
 
 	if(strFile.isNull())
 		return;
 
 	QFileInfo file(strFile);
 	
-	ui.scriptLineEdit->setText(file.baseName());
+	ui.scriptLineEdit->setText(file.absoluteFilePath());
 }
 
 void addrDialog::onMenuColor()

@@ -1,19 +1,24 @@
 #ifndef QTERMBBS_H
 #define QTERMBBS_H
 
-#include <qpoint.h>
-#include <qrect.h>
-//Added by qt3to4:
-#include <QString>
-#include <QPair>
-#include <QList>
+#include <QtCore/QPoint>
+#include <QtCore/QRect>
+#include <QtCore/QString>
+#include <QtCore/QPair>
+#include <QtCore/QList>
 
 class QRect;
+#ifdef SCRIPT_ENABLED
+class QScriptEngine;
+#endif
 
 namespace QTerm
 {
 class TextLine;
 class Buffer;
+#ifdef SCRIPT_ENABLED
+class ScriptHelper;
+#endif
 
 class BBS
 {
@@ -21,6 +26,9 @@ public:
     BBS(Buffer *);
     ~BBS();
 
+#ifdef SCRIPT_ENABLED
+    void setScript(QScriptEngine *, ScriptHelper *);
+#endif
     /* -1 -- undefined
      *  0 -- menu
      *  1 -- article or board list
@@ -29,6 +37,7 @@ public:
      */
     void setPageState();
     void setScreenStart(int);
+    int getScreenStart();
     bool setCursorPos(const QPoint&, QRect&);
 
     bool isSelected(int);
@@ -44,6 +53,7 @@ public:
     int getPageState();
     char getMenuChar();
     QRect getSelectRect();
+    void updateSelectRect();
     int getCursorType(const QPoint&);
     QString getMessage();
     QString getText(int startpt, int endpt);
@@ -59,6 +69,7 @@ protected:
     Buffer *m_pBuffer;
 
     QRect m_rcUrl;
+    QRect m_rcSelection;
     QString m_strUrl;
     QString m_strIP;
     char m_cMenuChar;
@@ -67,6 +78,10 @@ protected:
     int m_nScreenStart;
     QList< QPair<int,int> > m_urlPosList;
     QString m_url;
+#ifdef SCRIPT_ENABLED
+    QScriptEngine * m_scriptEngine;
+    ScriptHelper * m_scriptHelper;
+#endif
 };
 
 } // namespace QTerm

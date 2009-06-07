@@ -520,7 +520,8 @@ int Zmodem::ZmodemTInit(ZModem *info)
 	ZIFlush(info) ;
 
 	QString path = Global::instance()->fileCfg()->getItemValue("global","openfiledialog").toString();
-	strFileList = QFileDialog::getOpenFileNames(0, "Choose the files", path, "All files(*)");
+	if (strFileList.count() == 0)
+		strFileList = QFileDialog::getOpenFileNames(0, "Choose the files", path, "All files(*)");
 	if(strFileList.count()!=0)
 	{
 		QStringList::Iterator itFile = strFileList.begin();
@@ -987,6 +988,7 @@ int Zmodem::ZAttn(ZModem *info)
 
 void Zmodem::ZStatus(int type, int value, const char * status)
 {
+	QString msg = QString::fromLatin1(status);
 	emit ZmodemState(type, value, status);
 	switch(type)
 	{
@@ -2883,6 +2885,11 @@ void Zmodem::zmodemlog(const char *fmt, ... )
 void Zmodem::zmodemCancel()
 {
 	ZmodemAbort(&info);
+}
+
+void Zmodem::setFileList(const QStringList & fileList)
+{
+	strFileList = fileList;
 }
 
 } // namespace QTerm

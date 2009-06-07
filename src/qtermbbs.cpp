@@ -19,21 +19,44 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <QtDebug>
+
+#ifdef SCRIPT_ENABLED
+#include "scripthelper.h"
+#include <QtScript>
+#endif
+
 namespace QTerm
 {
 BBS::BBS(Buffer * buffer)
     :m_urlPosList()
 {
     m_pBuffer = buffer;
+#ifdef SCRIPT_ENABLED
+    m_scriptEngine = NULL;
+    m_scriptHelper = NULL;
+#endif
 }
 
 BBS::~BBS()
 {
 }
 
+#ifdef SCRIPT_ENABLED
+void BBS::setScript(QScriptEngine * engine, ScriptHelper * script)
+{
+    m_scriptEngine = engine;
+    m_scriptHelper = script;
+}
+#endif
+
 void BBS::setScreenStart(int nStart)
 {
     m_nScreenStart = nStart;
+}
+
+int BBS::getScreenStart()
+{
+    return m_nScreenStart;
 }
 
 bool BBS::setCursorPos(const QPoint& pt, QRect& rc)
@@ -41,6 +64,8 @@ bool BBS::setCursorPos(const QPoint& pt, QRect& rc)
     QRect rectOld = getSelectRect();
 
     m_ptCursor = pt;
+
+    updateSelectRect();
 
     QRect rectNew = getSelectRect();
 
@@ -71,6 +96,26 @@ QString BBS::getMessage()
 
 void BBS::setPageState()
 {
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("setPageState");
+        if (func.isFunction()) {
+            int ret = func.call().toInt32();
+            if (m_scriptHelper->accepted()) {
+                m_nPageState = ret;
+                return;
+            }
+        } else {
+            qDebug("setPageState is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
+
     m_nPageState = -1;
 
     TextLine * line;
@@ -88,7 +133,6 @@ void BBS::setPageState()
         if (isUnicolor(line))
             m_nPageState = 2; // reading
     }
-
 }
 
 int BBS::getCursorType(const QPoint& pt)
@@ -99,6 +143,24 @@ int BBS::getCursorType(const QPoint& pt)
     QRect rc = getSelectRect();
 
     int nCursorType = 8;
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL) {
+        m_scriptHelper->setAccepted(false);
+        TextLine * line = m_pBuffer->at(pt.y());
+        int x = pt.x();
+        int y = pt.y() - m_nScreenStart;
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("setCursorType");
+        if (func.isFunction()) {
+            int ret = func.call(QScriptValue(), QScriptValueList() << x << y).toInt32();
+            if (m_scriptHelper->accepted()) {
+                return ret;
+            }
+        } else {
+            qDebug("setCursorType is not a function");
+        }
+    }
+#endif
+
     switch (m_nPageState) {
     case -1: // not recognized
         nCursorType = 8;
@@ -184,16 +246,18 @@ char BBS::getMenuChar()
     return m_cMenuChar;
 }
 
-QRect BBS::getSelectRect()
+void BBS::updateSelectRect()
 {
     QRect rect(0, 0, 0, 0);
 
+    m_pBuffer->at(m_rcSelection.y())->setChanged(-1,-1);
     // current screen scrolled
     if (m_nScreenStart != (m_pBuffer->lines() - m_pBuffer->line())) {
-        return rect;
+        m_rcSelection = rect;
+        return;
     }
 
-    TextLine * line;
+    TextLine * line = NULL;
 
     switch (m_nPageState) {
     case -1:
@@ -258,8 +322,62 @@ QRect BBS::getSelectRect()
         break;
     }
 
-    return rect;
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL) {
+        m_scriptHelper->setAccepted(false);
+        rect.setRect(0,0,0,0);
+        int x = m_ptCursor.x();
+        int y = m_ptCursor.y() - m_nScreenStart;
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("isLineClickable");
+        if (func.isFunction()) {
+            bool clickable = func.call(QScriptValue(), QScriptValueList() << x << y).toBool();
+            if (m_scriptHelper->accepted()) {
+                if (clickable) {
+                    rect.setX(0);
+                    rect.setY(m_ptCursor.y());
+                    rect.setWidth(m_pBuffer->columns());
+                    rect.setHeight(1);
+                }
+                m_rcSelection = rect;
+                return;
+            }
+        } else {
+            qDebug("isLineClickable is not a function");
+        }
+        func = m_scriptEngine->globalObject().property("QTerm").property("getClickableString");
+        if (func.isFunction()) {
+            line = m_pBuffer->at(m_ptCursor.y());
+            QString clickableString = func.call(QScriptValue(), QScriptValueList() << x << y).toString();
+            if (m_scriptHelper->accepted()) {
+                if (!clickableString.isEmpty()) {
+                    int index = line->getText().indexOf(clickableString);
+                    int rectx = line->beginIndex(index);
+                    int width = line->beginIndex(index+clickableString.length()) - rectx;
+                    rect.setX(rectx);
+                    rect.setY(m_ptCursor.y());
+                    rect.setWidth(width);
+                    rect.setHeight(1);
+                }
+                m_rcSelection = rect;
+                return;
+            }
 
+        } else {
+            qDebug("getClickableString is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
+
+    m_rcSelection = rect;
+}
+
+QRect BBS::getSelectRect()
+{
+    return m_rcSelection;
 }
 
 bool BBS::isUnicolor(TextLine *line)
@@ -297,6 +415,28 @@ bool BBS::isIP(QRect& rcUrl, QRect& rcOld)
 bool BBS::checkUrl(QRect & rcUrl, QRect & rcOld)
 {
     m_strUrl = "";
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("checkUrl");
+        if (func.isFunction()) {
+            QString url= func.call(QScriptValue(), QScriptValueList() << m_ptCursor.x() << m_ptCursor.y()-m_nScreenStart).toString();
+            if (m_scriptHelper->accepted()) {
+                if (url.isEmpty()) {
+                    return false;
+                }
+                m_strUrl = url;
+                return true;
+            }
+        } else {
+            qDebug("checkUrl is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
     int pt = (m_ptCursor.y()-m_nScreenStart)*m_pBuffer->columns()+m_ptCursor.x();
     if (!m_urlPosList.isEmpty()) {
         QPair<int, int> url;
@@ -324,15 +464,31 @@ bool BBS::checkUrl(QRect & rcUrl, QRect & rcOld)
 // TODO: Further Simplification
 bool BBS::checkIP(QRect& rcUrl, QRect& rcOld)
 {
-    static const char http[] = "http://";
-    static const char https[] = "https://";
-    static const char mms[] = "mms://";
-    static const char rstp[] = "rstp://";
-    static const char ftp[] = "ftp://";
-    static const char mailto[] = "mailto:";
-    static const char telnet[] = "telnet://";
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("checkIP");
+        if (func.isFunction()) {
+            QString ipAddr= func.call(QScriptValue(), QScriptValueList() << m_ptCursor.x() << m_ptCursor.y()-m_nScreenStart).toString();
+            if (m_scriptHelper->accepted()) {
+                if (ipAddr.isEmpty()) {
+                    return false;
+                }
+                m_strIP = ipAddr;
+                return true;
+            }
+        } else {
+            qDebug("checkIP is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
+    QString strText = m_pBuffer->at(m_ptCursor.y())->getText();
     int at = m_pBuffer->at(m_ptCursor.y())->pos(m_ptCursor.x());
-    if (at == -1) {
+    if (at == -1 || at >= strText.length()) {
         return false;
     }
 
@@ -341,80 +497,30 @@ bool BBS::checkIP(QRect& rcUrl, QRect& rcOld)
         rcOld = m_rcUrl;
         return true;
     }
-    m_strIP = "";
-    rcOld = m_rcUrl;
 
-    QString strText = m_pBuffer->at(m_ptCursor.y())->getText();
-
-    if (at >= strText.length())
-        return false;
-
-    int i, index, begin, end, dot, url, host, ata;
+    QRegExp rx("(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|\\*)");
+    int pos = 0;
     int ip_begin = 0;
     int ip_end = 0;
-
-    for (i = at; i >= 0 && !isIllChar(strText.at(i)); i--);
-    url = i + 1;
-    for (i = at; i < strText.length() && !isIllChar(strText.at(i)); i++);
-    end = i;
-
-    int nNoType = -1;
-    QRegExp urlRe("^(mailto:|(https?|mms|rstp|ftp|gopher|telnet|ed2k|file)://)");
-    if ((begin = urlRe.indexIn(strText))!=-1) {
-        if (urlRe.capturedTexts().contains("mailto:")) {
-            if ((ata = strText.indexOf('@', begin + 1)) == -1)
-                host = url + (ata - begin) + 1;
-            else
-                return -1;
-        } else {
-            host = url+urlRe.matchedLength();
+    while ((pos = rx.indexIn(strText, pos)) != -1) {
+        if (pos < at && (pos + rx.matchedLength()) > at) {
+            break;
         }
-    } else {
-        begin = url;
-        if ((ata = strText.indexOf('@', begin + 1)) != -1) {
-            host = url + (ata - begin) + 1;
-            nNoType = 0;
-        } else {
-            host = url;
-            nNoType = 1;
-        }
+        pos += rx.matchedLength();
     }
 
-    ip_begin = host;
-    ip_end = end;
-    for (index = host, dot = host - 1, i = 0; index < end && strText.at(index) != '/'; index++) {
-        if (strText.at(index) == '@') {
-            ip_begin = index + 1;
-        }
-        if (strText.at(index) == ':') {
-            ip_end = index;
-        }
-        if (strText.at(index) == '.') {
-            if (index <= dot + 1) // xxx..x is illegal
-                return false;
-            dot = index;
-            i++;
-        } else {
-                if (!strText.at(index).isLetterOrNumber() &&
-                        strText.at(index) != '-' &&
-                        strText.at(index) != '_' &&
-                        strText.at(index) != '~' &&
-                        strText.at(index) != ':' &&
-                        strText.at(index) != '*' &&  //add by cyber@thuee.org, allow ip like 166.111.1.*
-                        strText.at(index) != '@'
-                   )
-                    return false;
-        }
+    if (rx.matchedLength() <= 0) {
+        return false;
     }
-    if (index > 0 && strText.at(index - 1) == '.')
-        return false;
 
-    if (i < 1 || ip_end <= ip_begin || end <= url)
-        return false;
+    ip_begin = pos;
+    ip_end = pos+rx.matchedLength();
+
     m_strIP = strText.mid(ip_begin, ip_end - ip_begin);//get the pure ip address
     if (m_strIP[ m_strIP.length()-1 ] == '*')
         m_strIP.replace(m_strIP.length() - 1 , 1, "1");
-    rcUrl = QRect(m_pBuffer->at(m_ptCursor.y())->beginIndex(url), m_ptCursor.y(), end - url, 1);
+    rcUrl = QRect(ip_begin, m_ptCursor.y(), ip_end - ip_begin, 1);
+
     return true;
 }
 
