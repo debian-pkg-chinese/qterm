@@ -22,7 +22,10 @@
 #include <QtCore/QFileInfo>
 #include <QtCore/QTranslator>
 #include <QtCore/QVariant>
+#include <QtCore/QUrl>
+#include <QtCore/QProcess>
 #include <QtGui/QApplication>
+#include <QtGui/QDesktopServices>
 #include <QtGui/QFileDialog>
 #include <QtGui/QMessageBox>
 
@@ -142,10 +145,13 @@ QStringList Global::loadNameList()
 bool Global::loadAddress(int n, Param& param)
 {
     QString strTmp, strSection;
-    if (n < 0)
+    strTmp = m_address->getItemValue("bbs list", "num").toString();
+    if ((n < 0 && strTmp.toInt() <= 0) || n < -1)
         strSection = "default";
-    else
+    else {
+        n = n < 0 ? 0 : n;
         strSection.sprintf("bbs %d", n);
+    }
 
     // check if larger than existence
     strTmp = m_address->getItemValue("bbs list", "num").toString();
@@ -233,6 +239,9 @@ bool Global::loadAddress(int n, Param& param)
     strTmp = m_address->getItemValue(strSection, "loadscript").toString();
     param.m_bLoadScript = (strTmp != "0");
     param.m_strScriptFile = m_address->getItemValue(strSection, "scriptfile").toString();
+    if (param.m_strScriptFile.isEmpty()) {
+        param.m_bLoadScript = false;
+    }
 
     strTmp = m_address->getItemValue(strSection, "menutype").toString();
     param.m_nMenuType = strTmp.toInt();
@@ -411,16 +420,16 @@ QString Global::getSaveFileName(const QString& filename, QWidget* widget)
     // get the previous dir
     QString path = m_config->getItemValue("global", "savefiledialog").toString();
 
-    QString strSave = QFileDialog::getSaveFileName(widget, "Choose a file to save under", path + "/" + filename, "*");
+    QString strSave = QFileDialog::getSaveFileName(widget, tr("Choose a file to save under"), path + "/" + filename, "*");
 
     QFileInfo fi(strSave);
 
     while (fi.exists()) {
         int yn = QMessageBox::warning(widget, "QTerm",
-                                      "File exists. Overwrite?", "Yes", "No");
+                                      tr("File exists. Overwrite?"), "Yes", "No");
         if (yn == 0)
             break;
-        strSave = QFileDialog::getSaveFileName(widget, "Choose a file to save under", path + "/" + filename, "*");
+        strSave = QFileDialog::getSaveFileName(widget, tr("Choose a file to save under"), path + "/" + filename, "*");
         if (strSave.isEmpty())
             break;
     }
@@ -537,6 +546,16 @@ bool Global::iniSettings()
 {
     //install the translator
     QString lang = m_config->getItemValue("global", "language").toString();
+    if (lang == "eng")
+        m_language = Global::English;
+    else if (lang == "chs")
+        m_language = Global::SimpilifiedChinese;
+    else if (lang == "cht")
+        m_language = Global::TraditionalChinese;
+    else {
+        qDebug("Language setting is not correct");
+        m_language = Global::English;
+    }
     if (lang != "eng" && !lang.isEmpty()) {
         // look in $HOME/.qterm/po/ first
         QString qm = QDir::homePath() + "/.qterm/po/qterm_" + lang + ".qm";
@@ -850,23 +869,31 @@ void Global::cleanup()
     }
 }
 
-void Global::openUrl(const QString & url)
+void Global::openUrl(const QString & urlStr)
 {
     QString command = m_pref.strHttp;
+    if (command.isEmpty()) {
+        QUrl url(urlStr,QUrl::TolerantMode);
+        if (!QDesktopServices::openUrl(url)) {
+            qDebug("Failed to open the url with QDesktopServices");
+        }
+        return;
+    }
+
     if(command.indexOf("%L")==-1) // no replace
         //QApplication::clipboard()->setText(strUrl);
-        command += " \"" + url +"\"";
+        command += " \"" + urlStr +"\"";
     else
-        command.replace("%L",  "\"" + url + "\"");
+        command.replace("%L",  "\"" + urlStr + "\"");
         //cstrCmd.replace("%L",  strUrl.toLocal8Bit());
 
-    //qDebug()<<"run command " << strCmd;
-    //QProcess::startDetached(strCmd);
-    //TODO: How to do this in Windows?
 #if !defined(_OS_WIN32_) && !defined(Q_OS_WIN32)
     command += " &";
-#endif
     system(command.toUtf8().data());
+#else
+    QProcess::startDetached(command);
+#endif
+
 }
 
 QString Global::convert(const QString & source, Global::Conversion flag)

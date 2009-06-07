@@ -29,7 +29,6 @@ AUTHOR:        kingson fiasco
 #include "popwidget.h"
 #include "qtermzmodem.h"
 #include "zmodemdialog.h"
-#include "qtermpython.h"
 #include "qtermhttp.h"
 #include "qtermiplocation.h"
 #include "osdmessage.h"
@@ -37,6 +36,10 @@ AUTHOR:        kingson fiasco
 #include "progressBar.h"
 #include "qtermglobal.h"
 #include "hostinfo.h"
+
+#ifdef SCRIPT_ENABLED
+#include "scripthelper.h"
+#endif // SCRIPT_ENABLED
 
 #ifdef DBUS_ENABLED
 #include "dbus.h"
@@ -79,6 +82,12 @@ AUTHOR:        kingson fiasco
 #include <QProgressBar>
 #include <QHBoxLayout>
 #include <QtCore/QProcess>
+#ifdef SCRIPT_ENABLED
+#include <QtScript>
+#ifdef SCRIPTTOOLS_ENABLED
+#include <QtScriptTools/QScriptEngineDebugger>
+#endif
+#endif
 #include <QtDebug>
 
 namespace QTerm
@@ -241,20 +250,27 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     QString pathLib = Global::instance()->pathLib();
     setMouseTracking(true);
 
+#ifdef SCRIPT_ENABLED
+    m_scriptEngine = NULL;
+    m_scriptHelper = NULL;
+#ifdef SCRIPTTOOLS_ENABLED
+    m_scriptDebugger = new QScriptEngineDebugger;
+#endif // SCRIPTTOOLS_ENABLED
+#endif // SCRIPT_ENABLED
 //init the textline list
 
     m_pBuffer = new Buffer(m_param.m_nRow, m_param.m_nCol, m_param.m_nScrollLines);
     if (param.m_nProtocolType == 0)
-        m_pTelnet = new Telnet(m_param.m_strTerm.toLatin1(),
+        m_pTelnet = new Telnet(m_param.m_strTerm,
                                m_param.m_nRow, m_param.m_nCol, false);
     else {
 #ifndef SSH_ENABLED
-        QMessageBox::warning(this, "sorry",
-                             "SSH support is not compiled, QTerm can only use Telnet!");
-        m_pTelnet = new Telnet(m_param.m_strTerm.toUtf8(),
+        QMessageBox::warning(this, "QTerm",
+                             tr("SSH support is not compiled, QTerm can only use Telnet!"));
+        m_pTelnet = new Telnet(m_param.m_strTerm,
                                m_param.m_nRow, m_param.m_nCol, false);
 #else
-        m_pTelnet = new Telnet(m_param.m_strTerm.toUtf8(),
+        m_pTelnet = new Telnet(m_param.m_strTerm,
                                m_param.m_nRow, m_param.m_nCol, true);
 #endif
     }
@@ -282,7 +298,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     setCentralWidget(m_pScreen);
     connect(m_pFrame, SIGNAL(bossColor()), m_pScreen, SLOT(bossColor()));
     connect(m_pFrame, SIGNAL(scrollChanged()), m_pScreen, SLOT(updateScrollBar()));
-    connect(m_pScreen, SIGNAL(inputEvent(QString *)), this, SLOT(inputHandle(QString *)));
+    connect(m_pScreen, SIGNAL(inputEvent(const QString &)), this, SLOT(inputHandle(const QString &)));
     connect(m_pZmodem, SIGNAL(ZmodemState(int, int, const QString&)),
             this, SLOT(ZmodemState(int, int, const QString&)));
     connect(m_pZmDialog, SIGNAL(canceled()), m_pZmodem, SLOT(zmodemCancel()));
@@ -314,7 +330,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_pUrl->addAction(tr("Open link"), this, SLOT(openLink()));
     m_pUrl->addAction(tr("Copy link address"), this, SLOT(copyLink()));
 
-    m_pMenu = m_pFrame->popupMenu();
+    m_pMenu = m_pFrame->genPopupMenu(this);
 
 //connect telnet signal to slots
     connect(m_pTelnet, SIGNAL(readyRead(int)),
@@ -382,48 +398,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 
     // the system wide script
     m_bPythonScriptLoaded = false;
-#ifdef HAVE_PYTHON
-    pModule = NULL;
-// python thread module
-    // get the global python thread lock
-    PyEval_AcquireLock();
 
-    // get a reference to the PyInterpreterState
-    extern PyThreadState * mainThreadState;
-    PyInterpreterState * mainInterpreterState = mainThreadState->interp;
-
-    // create a thread state object for this thread
-    PyThreadState * myThreadState = PyThreadState_New(mainInterpreterState);
-    PyThreadState_Swap(myThreadState);
-
-    PyImport_AddModule("qterm");
-    Py_InitModule4("qterm", qterm_methods,
-                   NULL, (PyObject*)NULL, PYTHON_API_VERSION);
-
-
-    if (m_param.m_bLoadScript && !m_param.m_strScriptFile.isEmpty()) {
-        PyObject *pName = PyString_FromString(m_param.m_strScriptFile);
-        pModule = PyImport_Import(pName);
-        Py_DECREF(pName);
-        if (pModule != NULL)
-            pDict = PyModule_GetDict(pModule);
-        else {
-            qDebug("Failed to PyImport_Import");
-        }
-
-        if (pDict != NULL)
-            m_bPythonScriptLoaded = true;
-        else {
-            qDebug("Failed to PyModule_GetDict");
-        }
-    }
-
-    //Clean up this thread's python interpreter reference
-    PyThreadState_Swap(NULL);
-    PyThreadState_Clear(myThreadState);
-    PyThreadState_Delete(myThreadState);
-    PyEval_ReleaseLock();
-#endif //HAVE_PYTHON
+    initScript();
 
     connectHost();
 }
@@ -451,29 +427,9 @@ Window::~Window()
     delete m_pMessage;
     delete m_pSound;
     delete m_hostInfo;
-
-#ifdef HAVE_PYTHON
-    // get the global python thread lock
-    PyEval_AcquireLock();
-
-    // get a reference to the PyInterpreterState
-    extern PyThreadState * mainThreadState;
-    PyInterpreterState * mainInterpreterState = mainThreadState->interp;
-
-    // create a thread state object for this thread
-    PyThreadState * myThreadState = PyThreadState_New(mainInterpreterState);
-    PyThreadState_Swap(myThreadState);
-
-    //Displose of current python module so we can reload in constructor.
-    if (pModule != NULL)
-        Py_DECREF(pModule);
-
-    //Clean up this thread's python interpreter reference
-    PyThreadState_Swap(NULL);
-    PyThreadState_Clear(myThreadState);
-    PyThreadState_Delete(myThreadState);
-    PyEval_ReleaseLock();
-#endif // HAVE_PYTHON
+#ifdef SCRIPTTOOLS_ENABLED
+    delete m_scriptDebugger;
+#endif
 }
 
 //close event received
@@ -481,7 +437,7 @@ void Window::closeEvent(QCloseEvent * clse)
 {
     if (m_bConnected && Global::instance()->m_pref.bWarn) {
         QMessageBox mb("QTerm",
-                       "Connected,Do you still want to exit?",
+                       tr("Connected,Do you still want to exit?"),
                        QMessageBox::Warning,
                        QMessageBox::Yes | QMessageBox::Default,
                        QMessageBox::No  | QMessageBox::Escape ,
@@ -518,9 +474,22 @@ void Window::idleProcess()
 
     m_bIdling = true;
     // system script can handle that
-#ifdef HAVE_PYTHON
-    if (pythonCallback("antiIdle", Py_BuildValue("(l)", this)))
-        return;
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("antiIdle");
+        if (func.isFunction()) {
+            func.call();
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("antiIdle is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
 #endif
     // the default function
     int length;
@@ -570,7 +539,23 @@ void Window::leaveEvent(QEvent *)
 
 void Window::mouseDoubleClickEvent(QMouseEvent * me)
 {
-    //pythonMouseEvent(3, me->button(), me->state(), me->pos(),0);
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << 3 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onMouseEvent is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
 }
 
 void Window::mousePressEvent(QMouseEvent * me)
@@ -590,9 +575,27 @@ void Window::mousePressEvent(QMouseEvent * me)
 
         // set the selecting flag
         m_bSelecting = true;
-        m_ptSelStart = m_pScreen->mapToChar(me->pos());
+        m_ptSelStart = me->pos();
         m_ptSelEnd = m_ptSelStart;
     }
+
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << 0 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onMouseEvent is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
 
     // Right Button
     if ((me->button()&Qt::RightButton)) {
@@ -612,11 +615,12 @@ void Window::mousePressEvent(QMouseEvent * me)
     }
     // Middle Button for paste
     if (me->button()&Qt::MidButton && !(me->modifiers())) {
-        if (m_bConnected)
+        if (m_bConnected) {
             if (!m_pBBS->getUrl().isEmpty())        // on Url
                 previewLink();
             else
                 pasteHelper(false);
+        }
         return;
     }
 
@@ -625,14 +629,12 @@ void Window::mousePressEvent(QMouseEvent * me)
 
     // xterm mouse event
     //sendMouseState(0, me->button(), me->state(), me->pos());
-
-    // python mouse event
-    //pythonMouseEvent(0, me->button(), me->state(), me->pos(),0);
 }
 
 
 void Window::mouseMoveEvent(QMouseEvent * me)
 {
+    m_ptMouse = me->pos();
     // selecting by leftbutton
     if ((me->buttons()&Qt::LeftButton) && m_bSelecting) {
         if (me->pos().y() < childrenRect().top())
@@ -640,13 +642,32 @@ void Window::mouseMoveEvent(QMouseEvent * me)
         if (me->pos().y() > childrenRect().bottom())
             m_pScreen->scrollLine(1);
 
-        m_ptSelEnd = m_pScreen->mapToChar(me->pos());
-        if (m_ptSelEnd != m_ptSelStart) {
-            m_pBuffer->setSelect(m_ptSelStart, m_ptSelEnd, m_bCopyRect);
+        m_ptSelEnd = me->pos();
+        QPoint point = m_ptSelEnd - m_ptSelStart;
+        if (point.manhattanLength() > 3) {
+            m_pBuffer->setSelect(m_pScreen->mapToChar(m_ptSelStart), m_pScreen->mapToChar(m_ptSelEnd), m_bCopyRect);
             m_pScreen->m_ePaintState = Screen::NewData;
             m_pScreen->update();
         }
     }
+
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << 2 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onMouseEvent is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
 
     if (m_bMouse && m_bConnected) {
         // set cursor pos, repaint if state changed
@@ -655,12 +676,12 @@ void Window::mouseMoveEvent(QMouseEvent * me)
             m_pScreen->repaint(m_pScreen->mapToRect(rect));
         // judge if URL
         QRect rcOld;
-        QRect rcOld_i_dont_need_you;
-        QRect rcUrl_leave_me_alone = m_rcUrl;
+        QRect rcOld_IP;
+        QRect rcUrl_IP = m_rcUrl;
         bool bUrl = false;
         if (Global::instance()->m_pref.bUrl) {
-            if (m_pBBS->isIP(rcUrl_leave_me_alone, rcOld_i_dont_need_you) && m_bCheckIP) {
-                if (rcUrl_leave_me_alone != rcOld_i_dont_need_you) {
+            if (m_pBBS->isIP(rcUrl_IP, rcOld_IP) && m_bCheckIP) {
+                if (rcUrl_IP != rcOld_IP) {
                     if (!m_ipTimer->isActive()) {
                         m_ipTimer->setSingleShot(false);
                         m_ipTimer->start(100);
@@ -673,8 +694,6 @@ void Window::mouseMoveEvent(QMouseEvent * me)
 
             if (m_pBBS->isUrl(m_rcUrl, rcOld)) {
                 setCursor(Qt::PointingHandCursor);
-                if (m_rcUrl != rcOld) {
-                }
                 bUrl = true;
             }
         }
@@ -685,8 +704,6 @@ void Window::mouseMoveEvent(QMouseEvent * me)
                 setCursor(cursor[nCursorType]);
         }
     }
-    // python mouse event
-    //pythonMouseEvent(2, me->button(), me->state(), me->pos(),0);
 }
 
 void Window::mouseReleaseEvent(QMouseEvent * me)
@@ -694,18 +711,11 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
     if (!m_bMouseClicked)
         return;
     m_bMouseClicked = false;
-    // other than Left Button ignored
-    if (!(me->button()&Qt::LeftButton) || (me->modifiers()&Qt::KeyboardModifierMask)) {
-        //pythonMouseEvent(1, me->button(), me->state(), me->pos(),0);
-        // no local mouse event
-        //sendMouseState(3, me->button(), me->state(), me->pos());
-        return;
-    }
 
     // Left Button for selecting
-    m_ptSelEnd = m_pScreen->mapToChar(me->pos());
+    m_ptSelEnd = me->pos();
     if (m_ptSelEnd != m_ptSelStart && m_bSelecting) {
-        m_pBuffer->setSelect(m_ptSelStart, m_ptSelEnd, m_bCopyRect);
+        m_pBuffer->setSelect(m_pScreen->mapToChar(m_ptSelStart), m_pScreen->mapToChar(m_ptSelEnd), m_bCopyRect);
         m_pScreen->m_ePaintState = Screen::NewData;
         m_pScreen->update();
         if (m_bAutoCopy)
@@ -715,6 +725,24 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
     }
     m_bSelecting = false;
 
+
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << 1 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onMouseEvent is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
 
     if (!m_bMouse || !m_bConnected)
         return;
@@ -779,31 +807,52 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
 
 void Window::wheelEvent(QWheelEvent *we)
 {
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onWheelEvent");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << we->delta() << (int) we->buttons() << (int) we->modifiers() << (int) we->orientation() << we->x() << we->y() );
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onWheelEvent is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
     int j = we->delta() > 0 ? 4 : 5;
     if (!(we->modifiers())) {
         if (Global::instance()->m_pref.bWheel && m_bConnected)
             m_pTelnet->write(direction[j], sizeof(direction[j]));
         return;
     }
-
-    //pythonMouseEvent(4, Qt::NoButton, we->state(), we->pos(),we->delta());
-
-    //sendMouseState(j, Qt::NoButton, we->state(), we->pos());
 }
 
 //keyboard input event
 void Window::keyPressEvent(QKeyEvent * e)
 {
-#ifdef HAVE_PYTHON
-    int state = 0;
-    if (e->state()&Qt::AltModifier)
-        state |= 0x08;
-    if (e->state()&Qt::ControlModifier)
-        state |= 0x10;
-    if (e->state()&Qt::ShiftModifier)
-        state |= 0x20;
-    pythonCallback("keyEvent",
-                   Py_BuildValue("liii", this, 0, state, e->key()));
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onKeyPressEvent");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << e->key() << (int) e->modifiers() << e->text());
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onMouseEvent is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
 #endif
     if (!m_bConnected) {
         if (e->key() == Qt::Key_Return)
@@ -941,6 +990,25 @@ void Window::readReady(int size)
         //decode
         m_pDecode->decode(str, size);
 
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onNewData");
+        if (func.isFunction()) {
+            func.call();
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onNewData is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
+
         if (m_bDoingLogin) {
             int n = m_pBuffer->caret().y();
             for (int y = n - 5;y < n + 5;y++) {
@@ -1009,31 +1077,40 @@ void Window::readReady(int size)
             }
         }
     if (m_bAutoReply) {
-#ifdef HAVE_PYTHON
-        if (!pythonCallback("autoReply", Py_BuildValue("(l)", this))) {
-#endif
-            // TODO: save messages
-            if (m_bIdling)
-                replyMessage();
-            else
-                m_replyTimer->start(m_param.m_nMaxIdle*1000 / 2);
-#ifdef HAVE_PYTHON
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("autoReply");
+        if (func.isFunction()) {
+            func.call();
+            if (m_scriptHelper->accepted()) {
+                return;
+            } else {
+                // TODO: save messages
+                if (m_bIdling)
+                    replyMessage();
+                else
+                    m_replyTimer->start(m_param.m_nMaxIdle*1000 / 2);
+            }
+        } else {
+            qDebug("autoReply is not a function");
         }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
 #endif
     }
     //m_pFrame->buzz();
 }
 
 m_pBBS->setPageState();
+m_pBBS->updateSelectRect();
 m_updateTimer->start(100);
 //refresh screen
 m_pScreen->m_ePaintState = Screen::NewData;
 m_pScreen->update();
-
-#ifdef HAVE_PYTHON
-// python
-pythonCallback("dataEvent", Py_BuildValue("(l)", this));
-#endif
 }
 
 //delete the buf
@@ -1044,8 +1121,27 @@ if (m_pZmodem->transferstate == TransferStop)
     m_pZmodem->transferstate = NoTransfer;
 }
 
-void Window::ZmodemState(int type, int value, const QString& status)
+void Window::ZmodemState(int type, int value, const QString& msg)
 {
+    QString status = m_codec->toUnicode(msg.toLatin1());
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onZmodemState");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << type << value << status);
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onZmodemState is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
     QString strMsg;
     //to be completed
     switch (type) {
@@ -1093,7 +1189,7 @@ void Window::ZmodemState(int type, int value, const QString& status)
     case    FileBegin:
         /* file transfer begins, str=name */
 //                qWarning("starting file %s", status);
-        m_pZmDialog->setFileInfo(m_codec->toUnicode(status.toLatin1()), value);
+        m_pZmDialog->setFileInfo(status, value);
         m_pZmDialog->setProgress(0);
         m_pZmDialog->clearErrorLog();
         m_pZmDialog->show();
@@ -1116,6 +1212,24 @@ void Window::ZmodemState(int type, int value, const QString& status)
 // telnet state slot
 void Window::TelnetState(int state)
 {
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onTelnetState");
+        if (func.isFunction()) {
+            func.call(QScriptValue(), QScriptValueList() << state);
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onTelnetState is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
     switch (state) {
     case TSRESOLVING:
         //statusBar()->message( tr("resolving host name") );
@@ -1366,19 +1480,29 @@ void Window::showStatusBar(bool bShow)
         statusBar()->hide();
 }
 
+void Window::debugConsole()
+{
+#ifdef SCRIPTTOOLS_ENABLED
+    m_scriptDebugger->action(QScriptEngineDebugger::InterruptAction)->trigger();
+#endif
+}
+
 void Window::runScript()
 {
     // get the previous dir
-    QString file = Global::instance()->getOpenFileName("Python File (*.py *.txt)", this);
+    QString file = Global::instance()->getOpenFileName("Script Files (*.js *.txt)", this);
 
     if (file.isEmpty())
         return;
 
-    runScriptFile(file.toLocal8Bit());
+    loadScriptFile(file);
 }
 
 void Window::stopScript()
 {
+#ifdef SCRIPT_ENABLED
+    m_scriptEngine->abortEvaluation();
+#endif
 }
 
 void Window::viewMessages()
@@ -1536,12 +1660,7 @@ void Window::jobDone(int e)
         Global::instance()->fileCfg()->save();
     } else if (e == DAE_TIMEOUT) {
         QMessageBox::warning(this, "timeout", "download article timeout, aborted");
-    } else if (e == PYE_ERROR) {
-        QMessageBox::warning(this, "Python script error", m_strPythonError);
-    } else if (e == PYE_FINISH) {
-        QMessageBox::information(this, "Python script finished", "Python script file executed successfully");
     }
-
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1600,7 +1719,7 @@ void Window::replyMessage()
 
     cstr += '\n';
     m_pTelnet->write(cstr, cstr.length());
-    m_pMessage->display("You have messages", PageViewMessage::Info, 0);
+    m_pMessage->display(tr("You have messages"), PageViewMessage::Info, 0);
 }
 
 void Window::saveSetting()
@@ -1609,7 +1728,7 @@ void Window::saveSetting()
         return;
 
     QMessageBox mb("QTerm",
-                   "Setting changed do you want to save it?",
+                   tr("Setting changed do you want to save it?"),
                    QMessageBox::Warning,
                    QMessageBox::Yes | QMessageBox::Default,
                    QMessageBox::No  | QMessageBox::Escape ,
@@ -1619,8 +1738,9 @@ void Window::saveSetting()
     }
 }
 
-void Window::externInput(const QByteArray& cstrText)
+void Window::externInput(const QString & strText)
 {
+    QByteArray cstrText = unicode2bbs(strText);
     QByteArray cstrParsed = parseString(cstrText);
     m_pTelnet->write(cstrParsed, cstrParsed.length());
 
@@ -1632,10 +1752,11 @@ QByteArray Window::unicode2bbs(const QString& text)
     return m_codec->fromUnicode(strTmp);
 }
 
-void Window::sendParsedString(const char * str)
+void Window::sendParsedString(const QString& str)
 {
-    int length;
-    QByteArray cstr = parseString(str, &length);
+    int length = 0;
+    QByteArray bbsText = unicode2bbs(str);
+    QByteArray cstr = parseString(bbsText, &length);
     m_pTelnet->write(cstr, length);
 }
 
@@ -1644,320 +1765,70 @@ void Window::setMouseMode(bool on)
     m_bMouseX11 = on;
 }
 
-/* 0-left 1-middle 2-right 3-relsase 4/5-wheel
- *
- */
-//void Window::sendMouseState( int num,
-//    Qt::ButtonState btnstate, Qt::ButtonState keystate, const QPoint& pt )
-void Window::sendMouseState(int num, Qt::KeyboardModifier btnstate, Qt::KeyboardModifier keystate, const QPoint& pt)
+
+void Window::initScript()
 {
-    /*
-    if(!m_bMouseX11)
-     return;
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL)
+        m_scriptEngine->abortEvaluation();
+#ifdef SCRIPTTOOLS_ENABLED
+    m_scriptDebugger->detach();
+#endif
+    delete m_scriptEngine;
+    delete m_scriptHelper;
+    m_scriptEngine = new QScriptEngine(this);
+    m_scriptHelper = new ScriptHelper(this, m_scriptEngine);
 
-    QPoint ptc = m_pScreen->mapToChar(pt);
-
-    if(btnstate&Qt::LeftButton)
-     num = num==0?0:num;
-    else if(btnstate&Qt::MidButton)
-     num = num==0?1:num;
-    else if(btnstate&Qt::RightButton)
-     num = num==0?2:num;
-
-    int state = 0;
-    if(keystate&Qt::ShiftModifier)
-     state |= 0x04;
-    if(keystate&Qt::MetaModifier)
-     state |= 0x08;
-    if(keystate&Qt::ControlModifier)
-     state |= 0x10;
-
-    // normal buttons are passed as 0x20 + button,
-    // mouse wheel (buttons 4,5) as 0x5c + button
-    if(num>3) num += 0x3c;
-
-    char mouse[10];
-    sprintf(mouse, "\033[M%c%c%c",
-      num+state+0x20,
-      ptc.x()+1+0x20,
-      ptc.y()+1+0x20);
-    m_pTelnet->write( mouse, strlen(mouse) );
-    */
-}
-
-/* ------------------------------------------------------------------------ */
-/*                                                                         */
-/*                           Python Func                                    */
-/*                                                                          */
-/* ------------------------------------------------------------------------ */
-
-
-void Window::runScriptFile(const QString & cstr)
-{
-    char str[32];
-    sprintf(str, "%ld", this);
-
-    char *argv[2] = {str, NULL};
-
-#ifdef HAVE_PYTHON
-    // get the global python thread lock
-    PyEval_AcquireLock();
-
-    // get a reference to the PyInterpreterState
-    extern PyThreadState * mainThreadState;
-    PyInterpreterState * mainInterpreterState = mainThreadState->interp;
-
-    // create a thread state object for this thread
-    PyThreadState * myThreadState = PyThreadState_New(mainInterpreterState);
-    PyThreadState_Swap(myThreadState);
-
-
-    PySys_SetArgv(1, argv);
-
-    runPythonFile(cstr.toLocal8Bit());
-
-    //Clean up this thread's python interpreter reference
-    PyThreadState_Swap(NULL);
-    PyThreadState_Clear(myThreadState);
-    PyThreadState_Delete(myThreadState);
-    PyEval_ReleaseLock();
-#endif // HAVE_PYTHON
-}
-
-#ifdef HAVE_PYTHON
-bool Window::pythonCallback(const QString & func, PyObject* pArgs)
-{
-    if (!m_bPythonScriptLoaded) {
-        Py_DECREF(pArgs);
-        return false;
-    };
-
-    bool done = false;
-    // get the global lock
-    PyEval_AcquireLock();
-    // get a reference to the PyInterpreterState
-
-    //Python thread references
-    extern PyThreadState * mainThreadState;
-
-    PyInterpreterState * mainInterpreterState = mainThreadState->interp;
-    // create a thread state object for this thread
-    PyThreadState * myThreadState = PyThreadState_New(mainInterpreterState);
-    PyThreadState_Swap(myThreadState);
-
-    PyObject *pF = PyString_FromString(func.toLatin1());
-    PyObject *pFunc = PyDict_GetItem(pDict, pF);
-    Py_DECREF(pF);
-
-    if (pFunc && PyCallable_Check(pFunc)) {
-        PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
-        Py_DECREF(pArgs);
-        if (pValue != NULL) {
-            done = true;
-            Py_DECREF(pValue);
-        } else {
-            QMessageBox::warning(this, "Python script error", getException());
-        }
-    } else {
-        PyErr_Print();
-        qDebug("Cannot find python %s callback function", func.toLatin1());
-    }
-
-    // swap my thread state out of the interpreter
-    PyThreadState_Swap(NULL);
-    // clear out any cruft from thread state object
-    PyThreadState_Clear(myThreadState);
-    // delete my thread state object
-    PyThreadState_Delete(myThreadState);
-    // release the lock
-    PyEval_ReleaseLock();
-
-    if (func == "autoReply")
-        m_pMessage->display("You have messages", PageViewMessage::Info, 0);
-
-    return done;
-}
-#endif //HAVE_PYTHON
-#if 0
-int Window::runPythonFile(const char * filename)
-{
-#ifdef HAVE_PYTHON
-    static char buffer[1024];
-    const char *file = filename;
-
-    char *p;
-
-    /* Have to do it like this. PyRun_SimpleFile requires you to pass a
-     * stdio file pointer, but Vim and the Python DLL are compiled with
-     * different options under Windows, meaning that stdio pointers aren't
-     * compatible between the two. Yuk.
-     *
-     * Put the string "execfile('file')" into buffer. But, we need to
-     * escape any backslashes or single quotes in the file name, so that
-     * Python won't mangle the file name.
-    * ---- kafa
-     */
-    strcpy(buffer, "def work_thread():\n"
-           "\ttry:\n\t\texecfile('");
-    p = buffer + 37; /* size of above  */
-
-    while (*file && p < buffer + (1024 - 3)) {
-        if (*file == '\\' || *file == '\'')
-            *p++ = '\\';
-        *p++ = *file++;
-    }
-
-    /* If we didn't finish the file name, we hit a buffer overflow */
-    if (*file != '\0')
-        return -1;
-
-    /* Put in the terminating "')" and a null */
-    *p++ = '\'';
-    *p++ = ',';
-    *p++ = '{';
-    *p++ = '}';
-    *p++ = ')';
-    *p++ = '\n';
-    *p++ = '\0';
-
-    Q3CString cstr;
-
-// cstr.sprintf("\t\tqterm.formatError(%ld,'')\n",this);
-// strcat(buffer, cstr);
-
-    cstr.sprintf("\texcept:\n"
-                 "\t\texc, val, tb = sys.exc_info()\n"
-                 "\t\tlines = traceback.format_exception(exc, val, tb)\n"
-                 "\t\terr = string.join(lines)\n"
-                 "\t\tprint err\n"
-                 "\t\tf=open('%s','w')\n"
-                 "\t\tf.write(err)\n"
-                 "\t\tf.close()\n"
-                 , getErrOutputFile(this).data());
-    strcat(buffer, cstr);
-
-    cstr.sprintf("\t\tqterm.formatError(%ld)\n", this);
-    strcat(buffer, cstr);
-
-    strcat(buffer, "\t\texit\n");
-
-    /* Execute the file */
-    PyRun_SimpleString("import thread,string,sys,traceback,qterm");
-    PyRun_SimpleString(buffer);
-    PyRun_SimpleString("thread.start_new_thread(work_thread,())\n");
-
-#endif // HAVE_PYTHON
-
-    return 0;
-}
+#ifdef SCRIPTTOOLS_ENABLED
+    m_scriptDebugger->attachTo(m_scriptEngine);
 #endif
 
-int Window::runPythonFile(const char * filename)
-{
-#ifdef HAVE_PYTHON
-    static char buffer[1024];
-    const char *file = filename;
-
-    char *p;
-
-    /* Have to do it like this. PyRun_SimpleFile requires you to pass a
-     * stdio file pointer, but Vim and the Python DLL are compiled with
-     * different options under Windows, meaning that stdio pointers aren't
-     * compatible between the two. Yuk.
-     *
-     * Put the string "execfile('file')" into buffer. But, we need to
-     * escape any backslashes or single quotes in the file name, so that
-     * Python won't mangle the file name.
-    * ---- kafa
-     */
-    strcpy(buffer, "def work_thread():\n"
-           "\ttry:\n\t\texecfile('");
-    p = buffer + 37; /* size of above  */
-
-    while (*file && p < buffer + (1024 - 3)) {
-        if (*file == '\\' || *file == '\'')
-            *p++ = '\\';
-        *p++ = *file++;
+    QScriptValue scriptHelper = m_scriptEngine->newQObject(m_scriptHelper);
+    m_scriptEngine->globalObject().setProperty("QTerm", scriptHelper);
+    if (!m_param.m_bLoadScript)
+        return;
+    m_pBBS->setScript(m_scriptEngine, m_scriptHelper);
+    QFile file(m_param.m_strScriptFile);
+    file.open(QIODevice::ReadOnly);
+    QString scripts = QString::fromUtf8(file.readAll());
+    file.close();
+    if (!m_scriptEngine->canEvaluate(scripts))
+        qDebug() << "Cannot evaluate the scripts";
+    m_scriptEngine->evaluate(scripts);
+    if (m_scriptEngine->hasUncaughtException()) {
+        QScriptValue exception = m_scriptEngine->uncaughtException();
+        qDebug() << "Exception: " << exception.toString();
     }
-
-    /* If we didn't finish the file name, we hit a buffer overflow */
-    if (*file != '\0')
-        return -1;
-
-    /* Put in the terminating "')" and a null */
-    *p++ = '\'';
-    *p++ = ',';
-    *p++ = '{';
-    *p++ = '}';
-    *p++ = ')';
-    *p++ = '\n';
-    *p++ = '\0';
-
-    QString str;
-
-// cstr.sprintf("\t\tqterm.formatError(%ld,'')\n",this);
-// strcat(buffer, cstr);
-
-    str = QString("\texcept:\n"
-                  "\t\texc, val, tb = sys.exc_info()\n"
-                  "\t\tlines = traceback.format_exception(exc, val, tb)\n"
-                  "\t\terr = string.join(lines)\n"
-                  "\t\tprint err\n"
-                  "\t\tf=open('%1','w')\n"
-                  "\t\tf.write(err)\n"
-                  "\t\tf.close()\n").arg(getErrOutputFile(this).data());
-    strcat(buffer, str.toLatin1());
-
-    str = QString("\t\tqterm.formatError(%1)\n").arg(static_cast<int>(this));
-    strcat(buffer, cstr);
-
-    strcat(buffer, "\t\texit\n");
-
-    /* Execute the file */
-    PyRun_SimpleString("import string,sys,traceback,qterm");
-    PyRun_SimpleString(buffer);
-    PyRun_SimpleString("work_thread()\n");
-
-#endif // HAVE_PYTHON
-
-    return 0;
+    m_scriptHelper->addImportedScript(file.fileName());
+    QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("init");
+    if (!func.isFunction()) {
+        qDebug() << "init is not a function";
+    }
+    func.call();
+#endif // SCRIPT_ENABLED
 }
 
-
-//void Window::pythonMouseEvent(int type, Qt::ButtonState btnstate, Qt::ButtonState keystate,
-//    const QPoint& pt, int delta  )
-void Window::pythonMouseEvent(int type, Qt::KeyboardModifier, Qt::KeyboardModifier, const QPoint & pt, int delta)
+void Window::loadScriptFile(const QString & filename)
 {
-    /*
-    int state=0;
-
-    if(btnstate&Qt::LeftButton)
-     state |= 0x01;
-    if(btnstate&Qt::RightButton)
-     state |= 0x02;
-    if(btnstate&Qt::MidButton)
-     state |= 0x04;
-
-    if(keystate&Qt::AltModifier)
-     state |= 0x08;
-    if(keystate&Qt::ControlModifier)
-     state |= 0x10;
-    if(keystate&Qt::ShiftModifier)
-     state |= 0x20;
-
-    QPoint ptc = m_pScreen->mapToChar(pt);
-
-    #ifdef HAVE_PYTHON
-    pythonCallback("mouseEvent",
-        Py_BuildValue("liiiii", this, type, state, ptc.x(), ptc.y(),delta));
-    #endif
-    */
+#ifdef SCRIPT_ENABLED
+    QFile file(filename);
+    file.open(QIODevice::ReadOnly);
+    QString scripts = QString::fromUtf8(file.readAll());
+    file.close();
+    if (!m_scriptEngine->canEvaluate(scripts))
+        qDebug() << "Cannot evaluate this script";
+    m_scriptEngine->evaluate(scripts);
+    if (m_scriptEngine->hasUncaughtException()) {
+        QScriptValue exception = m_scriptEngine->uncaughtException();
+        qDebug() << "Exception: " << exception.toString();
+    }
+#endif
 }
 
-void Window::inputHandle(QString * text)
+void Window::inputHandle(const QString & text)
 {
-    if (text->length() > 0) {
-        QByteArray cstrTmp = unicode2bbs(*text);
+    if (text.length() > 0) {
+        QByteArray cstrTmp = unicode2bbs(text);
         m_pTelnet->write(cstrTmp, cstrTmp.length());
     }
 }
@@ -1970,13 +1841,7 @@ void Window::inputHandle(QString * text)
 
 void Window::openLink()
 {
-    QString strCmd = Global::instance()->m_pref.strHttp;
-    if (strCmd.indexOf("%L") == -1) // no replace
-        //QApplication::clipboard()->setText(strUrl);
-        strCmd += " \"" + m_pBBS->getUrl() + "\"";
-    else
-        strCmd.replace(QRegExp("%L", Qt::CaseInsensitive), m_pBBS->getUrl());
-    QProcess::startDetached(strCmd);
+    Global::instance()->openUrl(m_pBBS->getUrl());
 }
 
 void Window::previewLink()
@@ -2012,5 +1877,21 @@ void Window::httpDone(QObject *pHttp)
 {
     pHttp->deleteLater();
 }
+
+void Window::showMessage(const QString & message, int type, int duration)
+{
+    m_pMessage->display(message, (PageViewMessage::Icon)type, duration);
+}
+
+QMenu * Window::popupMenu()
+{
+    return m_pMenu;
+}
+
+QMenu * Window::urlMenu()
+{
+    return m_pUrl;
+}
+
 }
 #include <qtermwindow.moc>

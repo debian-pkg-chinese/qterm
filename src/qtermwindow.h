@@ -5,16 +5,6 @@
 #include <config.h>
 #endif
 
-//#include "qterm.h"
-#ifdef HAVE_PYTHON
-#include <Python.h>
-#endif
-
-// #include <q3mainwindow.h>
-// #include <qcursor.h>
-//
-// #include <qthread.h>
-
 #include "qtermparam.h"
 #include "qtermconvert.h"
 #include "qtermsound.h"
@@ -32,9 +22,15 @@
 #include <QCloseEvent>
 #include <QWaitCondition>
 #include <QMutex>
+
 class QProgressDialog;
-class QScriptEngine;
 class QTextCodec;
+#ifdef SCRIPT_ENABLED
+class QScriptEngine;
+#ifdef SCRIPTTOOLS_ENABLED
+class QScriptEngineDebugger;
+#endif
+#endif
 
 namespace QTerm
 {
@@ -52,7 +48,9 @@ class zmodemDialog;
 class Http;
 class IPLocation;
 class PageViewMessage;
-class Script;
+#ifdef SCRIPT_ENABLED
+class ScriptHelper;
+#endif
 class HostInfo;
 // thread copy article
 class DAThread : public QThread
@@ -94,10 +92,12 @@ public slots:
     void color();
     void runScript();
     void stopScript();
+    void debugConsole();
     void showStatusBar(bool);
     void reconnect();
-    void sendParsedString(const char*);
+    void sendParsedString(const QString &);
     void showIP();
+    void inputHandle(const QString & text);
 public:
     void disconnect();
     void refresh();
@@ -105,9 +105,25 @@ public:
     void autoReply(bool);
     void antiIdle(bool);
 
-    void runScriptFile(const QString&);
-    void externInput(const QByteArray&);
+    void initScript();
+    void loadScriptFile(const QString&);
+    void externInput(const QString &);
     void getHttpHelper(const QString&, bool);
+    void showMessage(const QString &, int type, int duration);
+    Screen * getScreen()
+    {
+        return m_pScreen;
+    }
+    Zmodem * zmodem()
+    {
+        return m_pZmodem;
+    }
+    QMenu * popupMenu();
+    QMenu * urlMenu();
+    QPoint mousePos() const
+    {
+        return m_ptMouse;
+    }
 
 protected slots:
     // from Telnet
@@ -119,7 +135,6 @@ protected slots:
     void replyProcess();
     void updateProcess();
     void blinkTab();
-    void inputHandle(QString * text);
 
     //http menu
     void previewLink();
@@ -159,16 +174,9 @@ protected:
     QByteArray unicode2bbs(const QString&);
 
     QByteArray parseString(const QByteArray&, int *len = 0);
-#ifdef HAVE_PYTHON
-    bool pythonCallback(const QString &, PyObject*);
-#endif
-    int runPythonFile(const char*);
-    void pythonMouseEvent(int, Qt::KeyboardModifier, Qt::KeyboardModifier, const QPoint&, int);
 
     void closeEvent(QCloseEvent *);
     void keyPressEvent(QKeyEvent *);
-
-    void sendMouseState(int, Qt::KeyboardModifier, Qt::KeyboardModifier, const QPoint&);
 
     Screen * m_pScreen;
     Decode * m_pDecode;
@@ -185,6 +193,7 @@ protected:
 
     // mouse select
     QPoint m_ptSelStart, m_ptSelEnd;
+    QPoint m_ptMouse;
     bool m_bSelecting;
 
     // timer
@@ -233,6 +242,13 @@ protected:
     bool m_bMouseClicked;
 
     QTextCodec * m_codec;
+#ifdef SCRIPT_ENABLED
+    QScriptEngine * m_scriptEngine;
+    ScriptHelper * m_scriptHelper;
+#ifdef SCRIPTTOOLS_ENABLED
+    QScriptEngineDebugger * m_scriptDebugger;
+#endif
+#endif
 public:
     Frame * m_pFrame;
     Buffer * m_pBuffer;

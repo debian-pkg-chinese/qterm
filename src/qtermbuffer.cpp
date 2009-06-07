@@ -316,6 +316,23 @@ void Buffer::shiftStr(int index, int startX, int len, int num)
     }
 }
 
+void Buffer::reverseIndex()
+{
+    if (m_caretY == m_top) {
+        scrollLines(m_caretY, -1);
+    } else {
+        moveCursorOffset(0, -1);
+    }
+}
+
+void Buffer::index()
+{
+    if (m_caretY == m_bottom) {
+        scrollLines(m_caretY, 1);
+    } else {
+        moveCursorOffset(0, 1);
+    }
+}
 
 void Buffer::deleteLine(int n)
 {
@@ -547,7 +564,7 @@ void Buffer::setSelect(const QPoint& pt1, const QPoint& pt2, bool rect)
 
 void Buffer::clearSelect()
 {
-    if (m_ptSelStart == m_ptSelEnd)
+    if (m_ptSelStart == QPoint(-1,-1) || m_ptSelEnd == QPoint(-1,-1))
         return;
 
     for (int i = m_ptSelStart.y(); i <= m_ptSelEnd.y(); i++)
@@ -558,43 +575,34 @@ void Buffer::clearSelect()
 
 bool Buffer::isSelected(int index)
 {
-    if (m_ptSelStart == m_ptSelEnd)
-        return false;
-    else
-        return index >= m_ptSelStart.y() && index <= m_ptSelEnd.y();
+    return index >= m_ptSelStart.y() && index <= m_ptSelEnd.y();
 }
 
 bool Buffer::isSelected(const QPoint& pt, bool rect)
 {
-    if (m_ptSelStart == m_ptSelEnd)
-        return false;
-
     if (rect) {
         int x1, x2;
         x1 = qMin(m_ptSelStart.x(), m_ptSelEnd.x());
         x2 = qMax(m_ptSelStart.x(), m_ptSelEnd.x());
-        return pt.x() < x2 && pt.x() >= x1 && pt.y() >= m_ptSelStart.y() && pt.y() <= m_ptSelEnd.y();
+        return pt.x() <= x2 && pt.x() >= x1 && pt.y() >= m_ptSelStart.y() && pt.y() <= m_ptSelEnd.y();
     }
 
     if (pt.y() == m_ptSelStart.y() && m_ptSelStart.y() == m_ptSelEnd.y())
-        return pt.x() >= m_ptSelStart.x() && pt.x() < m_ptSelEnd.x();
+        return pt.x() >= m_ptSelStart.x() && pt.x() <= m_ptSelEnd.x();
     else
         if (pt.y() == m_ptSelStart.y())
             return pt.x() >= m_ptSelStart.x();
         else
             if (pt.y() == m_ptSelEnd.y())
-                return pt.x() < m_ptSelEnd.x();
+                return pt.x() <= m_ptSelEnd.x();
             else
                 return pt.y() > m_ptSelStart.y() && pt.y() < m_ptSelEnd.y();
 
 }
 
-QString Buffer::getSelectText(bool rect, bool color, const QByteArray& escape)
+QString Buffer::getSelectText(bool rect, bool color, const QString & escape)
 {
     QString strSelect = "";
-
-    if (m_ptSelStart == m_ptSelEnd)
-        return strSelect;
 
     QRect rc;
     QString strTemp;
@@ -631,13 +639,13 @@ QRect Buffer::getSelectRect(int index, bool rect)
         return QRect(qMin(m_ptSelStart.x(), m_ptSelEnd.x()), index, qAbs(m_ptSelEnd.x() - m_ptSelStart.x()) + 1, 1);
     else
         if (m_ptSelStart.y() == m_ptSelEnd.y())
-            return QRect(m_ptSelStart.x(), index, qMin(m_ptSelEnd.x()-1, m_col) - m_ptSelStart.x() + 1, 1);
+            return QRect(m_ptSelStart.x(), index, qMin(m_ptSelEnd.x(), m_col) - m_ptSelStart.x() + 1, 1);
         else
             if (index == m_ptSelStart.y())
                 return QRect(m_ptSelStart.x(), index, qMax(0, m_col - m_ptSelStart.x()), 1);
             else
                 if (index == m_ptSelEnd.y())
-                    return QRect(0, index, qMin(m_col, m_ptSelEnd.x()), 1);
+                    return QRect(0, index, qMin(m_col, m_ptSelEnd.x()+1), 1);
                 else
                     return QRect(0, index, m_col, 1);
 }

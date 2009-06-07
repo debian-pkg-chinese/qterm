@@ -359,7 +359,7 @@ void Screen::updateFont()
     }
     int marginw,marginh;
     marginw=marginh=0;
-    if (Frame::instance()->isMaximized()) {
+    if (Frame::instance()->isMaximized()||Frame::instance()->isFullScreen()) {
         marginw = (m_rcClient.width() - (m_pBuffer->columns()*m_nCharWidth))/2;
         marginh = (m_rcClient.height() - (m_pBuffer->line()*m_nCharHeight))/2;
     }
@@ -867,8 +867,10 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
     if (beginx < 0)
         beginx = 0;
 
-    if (endx >= linelength || endx < 0)
+    if (endx >= linelength || endx < 0) {
         endx = qMin(m_pBuffer->columns(), linelength)-1;
+        painter.eraseRect(mapToRect(beginx, index, linelength, 1)); // Maybe we should calculate more accurate size;
+    }
     if (endx >= qMin(color.size(), attr.size())) {
         endx = qMin(color.size(), attr.size()) -1;
     }
@@ -936,6 +938,7 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
         CharFlags flags = RenderAll;
         if ( pTextLine->isPartial(startx) ) {
             flags = RenderRight;
+            charWidth = 1;
         } else if ( charWidth == 2) {
             if (tempcp != color.at(i+1) || tempea != attr.at(i+1) || bSelected != m_pBuffer->isSelected(QPoint(i+1, index), m_pWindow->m_bCopyRect)) {
                 charWidth = 1;
@@ -1026,6 +1029,7 @@ void Screen::drawStr(QPainter& painter, const QString& str, int x, int y, int le
             painter.drawText(pt.x(), pt.y(), width, m_nCharHeight, Qt::AlignRight, str);
         }
     }
+    painter.setBackground(QBrush(m_color[0]));
 }
 
 
@@ -1221,7 +1225,7 @@ void Screen::inputMethodEvent(QInputMethodEvent * e)
 {
     QString commitString = e->commitString();
     if (!commitString.isEmpty()) {
-        emit inputEvent(&commitString);
+        emit inputEvent(commitString);
     }
     QString preeditString = e->preeditString();
     if (m_inputContent == NULL){

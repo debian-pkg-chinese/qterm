@@ -101,7 +101,10 @@ Frame::Frame()
 
 //create a tabbar in the hbox
     tabBar = new QTabBar(statusBar());
-    statusBar()->addWidget(tabBar, 0);
+#if QT_VERSION >= 0x040500
+    tabBar->setExpanding(false);
+#endif
+    statusBar()->addWidget(tabBar, 90);
     connect(tabBar, SIGNAL(selected(int)), this, SLOT(selectionChanged(int)));
     //tabBar->setShape(QTabBar::TriangularBelow);
     tabBar->setShape(QTabBar:: RoundedSouth);
@@ -114,7 +117,6 @@ Frame::Frame()
 //create the window manager to deal with the window-tab-icon pairs
     wndmgr = new WndMgr(this);
 
-    m_popupMenu = NULL;
 
     initShortcuts();
 
@@ -138,8 +140,6 @@ Frame::Frame()
     enableMenuToolBar(false);
 
     initThemesMenu();
-
-    initPopupMenu();
 
     installEventFilter(this);
 }
@@ -242,7 +242,7 @@ void Frame::quickLogin()
 {
     quickDialog quick(this);
 
-    Global::instance()->loadAddress(-1, quick.param);
+    Global::instance()->loadAddress(-2, quick.param);
 
     if (quick.exec() == 1) {
         newWindow(quick.param);
@@ -318,8 +318,8 @@ void Frame::homepage()
 void Frame::windowsMenuAboutToShow()
 {
     windowsMenu->clear();
-    QAction * cascadeAction = windowsMenu->addAction(tr("Cascade"), m_MdiArea, SLOT(cascadeSubWindows()));
-    QAction * tileAction = windowsMenu->addAction(tr("Tile"), m_MdiArea, SLOT(tileSubWindows()));
+    QAction * cascadeAction = windowsMenu->addAction(tr("&Cascade"), m_MdiArea, SLOT(cascadeSubWindows()));
+    QAction * tileAction = windowsMenu->addAction(tr("&Tile"), m_MdiArea, SLOT(tileSubWindows()));
     if (m_MdiArea->subWindowList().isEmpty()) {
         cascadeAction->setEnabled(false);
         tileAction->setEnabled(false);
@@ -329,7 +329,7 @@ void Frame::windowsMenuAboutToShow()
 #ifdef Q_OS_MACX
     // used to dock the programe
     if (isHidden())
-        windowsMenu->addAction(tr("Main Window"), this, SLOT(trayShow()));
+        windowsMenu->addAction(tr("&Main Window"), this, SLOT(trayShow()));
 #endif
 
     QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
@@ -350,9 +350,10 @@ void Frame::windowsMenuActivated()
         qDebug("Frame::windowsMenuActivated: No sender found");
         return;
     }
-    int id = static_cast<QAction *>(action)->data().toInt();
-    QMdiSubWindow* w = m_MdiArea->subWindowList().at(id);
+    int id = qobject_cast<QAction *>(action)->data().toInt();
+    Window * w = qobject_cast<Window *>(m_MdiArea->subWindowList().at(id)->widget());
     if (w) {
+        w->setFocus();
         w->showMaximized();
     } else {
         qDebug() << "Frame::windowsMenuActivated: No window found, id: " << id;
@@ -363,7 +364,7 @@ void Frame::popupConnectMenu()
 {
     connectMenu->clear();
 
-    connectMenu->addAction("Quick Login", this, SLOT(quickLogin()));
+    connectMenu->addAction(tr("Quick Login"), this, SLOT(quickLogin()));
     connectMenu->addSeparator();
 
     QStringList listName = Global::instance()->loadNameList();
@@ -432,7 +433,15 @@ void Frame::closeEvent(QCloseEvent * clse)
         }
     }
     while (wndmgr->count() > 0) {
-        bool closed = m_MdiArea->activeSubWindow()->close();
+        QWidget * w = m_MdiArea->activeSubWindow();
+        if (w == NULL) {
+            w = m_MdiArea->subWindowList().at(0);
+            if (w == NULL) {
+                qDebug("get mdiarea subwindow failed");
+                break;
+            }
+        }
+        bool closed = w->close();
         if (!closed) {
             clse->ignore();
             return;
@@ -453,7 +462,7 @@ void Frame::updateLang(QAction * action)
     QMessageBox::information(this, "QTerm",
                              tr("This will take effect after restart,\nplease close all windows and restart."));
     Config * conf = Global::instance()->fileCfg();
-    conf->setItemValue("global", "language", action->objectName());
+    conf->setItemValue("global", "language", action->data().toString());
     conf->save();
 }
 
@@ -564,6 +573,14 @@ void Frame::uiFont()
     }
 }
 
+void Frame::hideMenuBar(bool hide)
+{
+    if (hide)
+        menuBar()->hide();
+    else
+        menuBar()->show();
+}
+
 void Frame::triggerFullScreen(bool isFullScreen)
 {
     Global::instance()->setFullScreen(isFullScreen);
@@ -572,19 +589,17 @@ void Frame::triggerFullScreen(bool isFullScreen)
     if (isFullScreen) {
         Global::instance()->saveGeometry(saveGeometry());
         Global::instance()->saveState(saveState());
-        menuBar()->hide();
+        //menuBar()->hide();
         mdiTools->hide();
         mdiconnectTools->hide();
-        m_popupMenu->addAction(m_fullAction);
         key->hide();
         //showStatusBar();
         //showSwitchBar();
         showFullScreen();
     } else {
-        menuBar()->show();
+        //menuBar()->show();
         restoreGeometry(Global::instance()->loadGeometry());
         restoreState(Global::instance()->loadState());
-        m_popupMenu->removeAction(m_fullAction);
         emit scrollChanged();
         showNormal();
         //showStatusBar();
@@ -747,6 +762,21 @@ void Frame::reconnect(bool isEnabled)
     wndmgr->activeWindow()->m_bReconnect = isEnabled;
 }
 
+void Frame::debugConsole()
+{
+#ifndef SCRIPTTOOLS_ENABLED
+    QMessageBox::information(this, "QTerm",
+                             tr("You need to enable the script engine debugger to use this feature. Please recompile QTerm with the debugger enabled (need Qt 4.5 or newer version)"));
+#else
+    wndmgr->activeWindow()->debugConsole();
+#endif
+}
+
+void Frame::reloadScript()
+{
+    wndmgr->activeWindow()->initScript();
+}
+
 void Frame::runScript()
 {
     wndmgr->activeWindow()->runScript();
@@ -768,9 +798,9 @@ void Frame::keyClicked(int id)
     QString strTmp = conf->getItemValue("key", strItem).toString();
 
     if (strTmp[0] == '0') { // key
-        wndmgr->activeWindow()->externInput(strTmp.mid(1).toLatin1());
+        wndmgr->activeWindow()->externInput(strTmp.mid(1));
     } else if (strTmp[0] == '1') { // script
-        wndmgr->activeWindow()->runScriptFile(strTmp.mid(1).toLatin1());
+        wndmgr->activeWindow()->loadScriptFile(strTmp.mid(1));
     } else if (strTmp[0] == '2') { // program
         system((strTmp.mid(1) + " &").toLocal8Bit());
     }
@@ -908,9 +938,9 @@ void Frame::initActions()
     codecGroup->addAction(m_S2TAction);
     codecGroup->addAction(m_T2SAction);
 
-    m_fontAction = new QAction(QPixmap(pathLib + "pic/fonts.png"), tr("&Font"), this);
+    m_fontAction = new QAction(QPixmap(pathLib + "pic/fonts.png"), tr("&Font..."), this);
     m_fontAction->setObjectName("actionFont");
-    m_colorAction = new QAction(QPixmap(pathLib + "pic/color.png"), tr("&Color"), this);
+    m_colorAction = new QAction(QPixmap(pathLib + "pic/color.png"), tr("&Color..."), this);
     m_colorAction->setObjectName("actionColor");
     m_refreshAction = new QAction(QPixmap(pathLib + "pic/refresh.png"), tr("&Refresh"), this);
     m_refreshAction->setObjectName("actionRefresh");
@@ -919,22 +949,29 @@ void Frame::initActions()
     m_engAction = new QAction(tr("&English"), this);
     m_engAction->setObjectName("actionEng");
     m_engAction->setCheckable(true);
+    m_engAction->setData("eng");
     m_chsAction = new QAction(tr("&Simplified Chinese"), this);
     m_chsAction->setObjectName("actionChs");
     m_chsAction->setCheckable(true);
+    m_chsAction->setData("chs");
     m_chtAction = new QAction(tr("&Traditional Chinese"), this);
     m_chtAction->setObjectName("actionCht");
     m_chtAction->setCheckable(true);
+    m_chtAction->setData("cht");
     langGroup->addAction(m_engAction);
     langGroup->addAction(m_chsAction);
     langGroup->addAction(m_chtAction);
 
-    m_uiFontAction = new QAction(tr("&UI Font"), this);
+    m_uiFontAction = new QAction(tr("&UI Font..."), this);
     m_uiFontAction->setObjectName("actionUiFont");
     m_fullAction = new QAction(tr("&Full Screen"), this);
     m_fullAction->setObjectName("actionFull");
     m_fullAction->setCheckable(true);
     addAction(m_fullAction);
+    m_menuBarAction= new QAction(tr("&Hide Menu Bar"), this);
+    m_menuBarAction->setObjectName("actionMenuBar");
+    m_menuBarAction->setCheckable(true);
+    addAction(m_menuBarAction);
     m_bossAction = new QAction(tr("Boss &Color"), this);
     m_bossAction->setObjectName("actionBoss");
 
@@ -959,14 +996,14 @@ void Frame::initActions()
     m_switchAction->setObjectName("actionSwitch");
     m_switchAction->setCheckable(true);
 
-    m_currentSessionAction = new QAction(QPixmap(pathLib + "pic/pref.png"), tr("&Setting For Currrent Session"), this);
+    m_currentSessionAction = new QAction(QPixmap(pathLib + "pic/pref.png"), tr("&Setting For Currrent Session..."), this);
     m_currentSessionAction->setObjectName("actionCurrentSession");
-    m_defaultAction = new QAction(tr("&Default Setting"), this);
+    m_defaultAction = new QAction(tr("&Default Setting..."), this);
     m_defaultAction->setObjectName("actionDefault");
-    m_prefAction = new QAction(tr("&Preference"), this);
+    m_prefAction = new QAction(tr("&Preference..."), this);
     m_prefAction->setObjectName("actionPref");
 
-    m_copyArticleAction = new QAction(QPixmap(pathLib + "pic/article.png"), tr("&Copy Article"), this);
+    m_copyArticleAction = new QAction(QPixmap(pathLib + "pic/article.png"), tr("&Copy Article..."), this);
     m_copyArticleAction->setObjectName("actionCopyArticle");
     m_antiIdleAction = new QAction(QPixmap(pathLib + "pic/anti-idle.png"), tr("Anti &Idle"), this);
     m_antiIdleAction->setObjectName("actionAntiIdle");
@@ -974,7 +1011,7 @@ void Frame::initActions()
     m_autoReplyAction = new QAction(QPixmap(pathLib + "pic/auto-reply.png"), tr("Auto &Reply"), this);
     m_autoReplyAction->setObjectName("actionAutoReply");
     m_autoReplyAction->setCheckable(true);
-    m_viewMessageAction = new QAction(QPixmap(pathLib + "pic/message.png"), tr("&View Messages"), this);
+    m_viewMessageAction = new QAction(QPixmap(pathLib + "pic/message.png"), tr("&View Messages..."), this);
     m_viewMessageAction->setObjectName("actionViewMessage");
     m_beepAction = new QAction(QPixmap(pathLib + "pic/sound.png"), tr("&Beep "), this);
     m_beepAction->setObjectName("actionBeep");
@@ -982,13 +1019,21 @@ void Frame::initActions()
     m_mouseAction = new QAction(QPixmap(pathLib + "pic/mouse.png"), tr("&Mouse Support"), this);
     m_mouseAction->setObjectName("actionMouse");
     m_mouseAction->setCheckable(true);
-    m_viewImageAction = new QAction(tr("&Image Viewer"), this);
+    m_viewImageAction = new QAction(tr("&Image Viewer..."), this);
     m_viewImageAction->setObjectName("actionViewImage");
 
+    m_scriptReloadAction = new QAction(tr("&Reload System Script"), this);
+    m_scriptReloadAction->setObjectName("actionScriptReload");
+    m_scriptReloadAction->setEnabled(false);
     m_scriptRunAction = new QAction(tr("&Run..."), this);
     m_scriptRunAction->setObjectName("actionScriptRun");
+    m_scriptRunAction->setEnabled(false);
     m_scriptStopAction = new QAction(tr("&Stop"), this);
     m_scriptStopAction->setObjectName("actionScriptStop");
+    m_scriptStopAction->setEnabled(false);
+    m_scriptDebugAction = new QAction(tr("&Debug..."), this);
+    m_scriptDebugAction->setObjectName("actionScriptDebug");
+    m_scriptDebugAction->setEnabled(false);
 
     m_aboutAction = new QAction(tr("About &QTerm"), this);
     m_aboutAction->setObjectName("actionAbout");
@@ -999,10 +1044,10 @@ void Frame::initActions()
     m_reconnectAction->setObjectName("actionReconnect");
     m_reconnectAction->setCheckable(true);
 
-    m_shortcutsAction = new QAction(tr("Configure Shortcuts..."),this);
+    m_shortcutsAction = new QAction(tr("&Configure Shortcuts..."),this);
     m_shortcutsAction->setObjectName("actionShortcuts");
 
-    m_toolbarsAction = new QAction(tr("Configure Toolbars..."),this);
+    m_toolbarsAction = new QAction(tr("Configure &Toolbars..."),this);
     m_toolbarsAction->setObjectName("actionToolbars");
 
     connect(m_connectAction, SIGNAL(triggered()), this, SLOT(connectIt()));
@@ -1030,6 +1075,7 @@ void Frame::initActions()
 
     connect(m_uiFontAction, SIGNAL(triggered()), this, SLOT(uiFont()));
     connect(m_fullAction, SIGNAL(toggled(bool)), this, SLOT(triggerFullScreen(bool)));
+    connect(m_menuBarAction, SIGNAL(toggled(bool)), this, SLOT(hideMenuBar(bool)));
     connect(m_bossAction, SIGNAL(triggered()), this, SLOT(bosscolor()));
 
     connect(scrollGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateScroll(QAction*)));
@@ -1049,8 +1095,10 @@ void Frame::initActions()
     connect(m_mouseAction, SIGNAL(toggled(bool)), this, SLOT(updateMouse(bool)));
     connect(m_viewImageAction, SIGNAL(triggered()), this, SLOT(viewImages()));
 
+    connect(m_scriptReloadAction, SIGNAL(triggered()), this, SLOT(reloadScript()));
     connect(m_scriptRunAction, SIGNAL(triggered()), this, SLOT(runScript()));
     connect(m_scriptStopAction, SIGNAL(triggered()), this, SLOT(stopScript()));
+    connect(m_scriptDebugAction, SIGNAL(triggered()), this, SLOT(debugConsole()));
 
     connect(m_aboutAction, SIGNAL(triggered()), this, SLOT(aboutQTerm()));
     connect(m_homepageAction, SIGNAL(triggered()), this, SLOT(homepage()));
@@ -1121,7 +1169,6 @@ void Frame::addMainMenu()
     themesMenu = new QMenu(tr("&Themes"), this);
     view->addMenu(themesMenu);
 
-    view->addAction(m_fullAction);
     view->addAction(m_bossAction);
 
     view->addSeparator();
@@ -1132,6 +1179,9 @@ void Frame::addMainMenu()
     view->addMenu(scrollMenu);
     view->addAction(m_statusAction);
     view->addAction(m_switchAction);
+    view->addSeparator();
+    view->addAction(m_menuBarAction);
+    view->addAction(m_fullAction);
 
 
     // Option Menu
@@ -1163,6 +1213,9 @@ void Frame::addMainMenu()
     mainMenu->addMenu(script);
     script->addAction(m_scriptRunAction);
     script->addAction(m_scriptStopAction);
+    script->addSeparator();
+    script->addAction(m_scriptDebugAction);
+    script->addAction(m_scriptReloadAction);
 
     //Window menu
     windowsMenu = new QMenu(tr("&Windows"), this);
@@ -1180,25 +1233,21 @@ void Frame::addMainMenu()
 
 }
 
-void Frame::initPopupMenu()
+QMenu * Frame::genPopupMenu(QWidget * owner)
 {
-    m_popupMenu = new QMenu(this);
-    m_popupMenu->addAction(m_copyAction);
-    m_popupMenu->addAction(m_pasteAction);
-    m_popupMenu->addAction(m_copyArticleAction);
-    m_popupMenu->addSeparator();
-    m_popupMenu->addAction(m_fontAction);
-    m_popupMenu->addAction(m_colorAction);
-    m_popupMenu->addSeparator();
-    m_popupMenu->addAction(m_currentSessionAction);
-}
-
-QMenu * Frame::popupMenu()
-{
-    if (m_popupMenu == NULL) {
-        initPopupMenu();
-    }
-    return m_popupMenu;
+    QMenu * popupMenu = new QMenu(owner);
+    popupMenu->addAction(m_menuBarAction);
+    popupMenu->addAction(m_fullAction);
+    popupMenu->addSeparator();
+    popupMenu->addAction(m_copyAction);
+    popupMenu->addAction(m_pasteAction);
+    popupMenu->addAction(m_copyArticleAction);
+    popupMenu->addSeparator();
+    popupMenu->addAction(m_fontAction);
+    popupMenu->addAction(m_colorAction);
+    popupMenu->addSeparator();
+    popupMenu->addAction(m_currentSessionAction);
+    return popupMenu;
 }
 
 void Frame::updateMenuToolBar()
@@ -1250,9 +1299,14 @@ void Frame::enableMenuToolBar(bool enable)
     m_beepAction->setEnabled(enable);
     m_mouseAction->setEnabled(enable);
 
+#ifdef SCRIPT_ENABLED
+    m_scriptReloadAction->setEnabled(enable);
     m_scriptRunAction->setEnabled(enable);
     m_scriptStopAction->setEnabled(enable);
-
+#ifdef SCRIPTTOOLS_ENABLED
+    m_scriptDebugAction->setEnabled(enable);
+#endif // SCRIPTTOOLS_ENABLED
+#endif
     if (enable) {
         mdiconnectTools->setVisible(Global::instance()->showToolBar(mdiconnectTools->objectName()));
     } else {
@@ -1353,12 +1407,12 @@ void Frame::buildTrayMenu()
     trayMenu->clear();
 
     if (isHidden())
-        trayMenu->addAction(tr("Show"), this, SLOT(trayShow()));
+        trayMenu->addAction(tr("&Show"), this, SLOT(trayShow()));
     else
-        trayMenu->addAction(tr("Hide"), this, SLOT(trayHide()));
+        trayMenu->addAction(tr("&Hide"), this, SLOT(trayHide()));
     trayMenu->addSeparator();
-    trayMenu->addAction(tr("About"), this, SLOT(aboutQTerm()));
-    trayMenu->addAction(tr("Exit"), this, SLOT(exitQTerm()));
+    trayMenu->addAction(tr("&About"), this, SLOT(aboutQTerm()));
+    trayMenu->addAction(tr("&Exit"), this, SLOT(exitQTerm()));
 }
 
 void Frame::trayActivated(QSystemTrayIcon::ActivationReason reason)
@@ -1417,8 +1471,6 @@ void Frame::buzz()
 
     t.start();
     for (int i = 32; i > 0;) {
-        //QApplication::processEvents();
-        qApp->processEvents();
         if (t.elapsed() >= 1) {
             int delta = i >> 2;
             int dir = i & 3;

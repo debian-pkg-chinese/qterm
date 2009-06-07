@@ -41,7 +41,7 @@ public:
     void enableMenuToolBar(bool);
     void popupFocusIn(Window * window = 0);
     void buzz();
-    QMenu * popupMenu();
+    QMenu * genPopupMenu(QWidget * owner);
 signals:
     void bossColor();
     void scrollChanged();
@@ -60,8 +60,10 @@ protected slots:
     void updateLang(QAction*);
     void defaultSetting();
     void preference();
+    void reloadScript();
     void runScript();
     void stopScript();
+    void debugConsole();
 
     // Toolbar
     void connectIt();
@@ -82,6 +84,7 @@ protected slots:
     void color();
     void refresh();
     void triggerFullScreen(bool isFullScreen);
+    void hideMenuBar(bool hide);
     void bosscolor();
     void uiFont();
     void antiIdle(bool);
@@ -133,7 +136,6 @@ protected:
     QMenu * langMenu;
     QMenu * connectMenu;
 
-    QMenu * m_popupMenu;
 //  File
     QAction * m_connectAction;
     QAction * m_disconnectAction;
@@ -183,9 +185,12 @@ protected:
     QAction * m_beepAction;
     QAction * m_mouseAction;
     QAction * m_viewImageAction;
+    QAction * m_menuBarAction;
 
+    QAction * m_scriptReloadAction;
     QAction * m_scriptRunAction;
     QAction * m_scriptStopAction;
+    QAction * m_scriptDebugAction;
 
     QAction * m_aboutAction;
     QAction * m_homepageAction;
@@ -223,7 +228,6 @@ protected:
 
     void addMainMenu();
     void addMainTool();
-    void initPopupMenu();
 
     void updateKeyToolBar();
 

@@ -69,6 +69,8 @@ public:
     void moveCursor(int, int);
     void saveCursor();
     void restoreCursor();
+    void reverseIndex();
+    void index();
     void cr();
 
     // non-printing characters
@@ -89,7 +91,7 @@ public:
     void clearSelect();
     bool isSelected(const QPoint&, bool);
     bool isSelected(int);
-    QString getSelectText(bool, bool, const QByteArray&);
+    QString getSelectText(bool, bool, const QString &);
     QRect getSelectRect(int, bool);
 
 signals:
