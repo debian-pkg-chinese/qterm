@@ -186,12 +186,11 @@ bool Global::loadAddress(int n, Param& param)
     param.m_bAlwaysHighlight = (strTmp != "0");
     strTmp = m_address->getItemValue(strSection, "ansicolor").toString();
     param.m_bAnsiColor = (strTmp != "0");
-    param.m_strFontName = m_address->getItemValue(strSection, "fontname").toString();
+    param.m_strASCIIFontName = m_address->getItemValue(strSection, "asciifont").toString();
+    param.m_strGeneralFontName = m_address->getItemValue(strSection, "generalfont").toString();
     strTmp = m_address->getItemValue(strSection, "fontsize").toString();
     param.m_nFontSize = strTmp.toInt();
-    param.m_clrFg.setNamedColor(m_address->getItemValue(strSection, "fgcolor").toString());
-    param.m_clrBg.setNamedColor(m_address->getItemValue(strSection, "bgcolor").toString());
-    param.m_strSchemaFile = m_address->getItemValue(strSection, "schemafile").toString();
+    param.m_strSchemeFile = m_address->getItemValue(strSection, "schemefile").toString();
 
     param.m_strTerm = m_address->getItemValue(strSection, "termtype").toString();
     strTmp = m_address->getItemValue(strSection, "keytype").toString();
@@ -284,12 +283,11 @@ void Global::saveAddress(int n, const Param& param)
     m_address->setItemValue(strSection, "autofont", param.m_bAutoFont ? "1" : "0");
     m_address->setItemValue(strSection, "alwayshighlight", param.m_bAlwaysHighlight ? "1" : "0");
     m_address->setItemValue(strSection, "ansicolor", param.m_bAnsiColor ? "1" : "0");
-    m_address->setItemValue(strSection, "fontname", param.m_strFontName);
+    m_address->setItemValue(strSection, "asciifont", param.m_strASCIIFontName);
+    m_address->setItemValue(strSection, "generalfont", param.m_strGeneralFontName);
     strTmp.setNum(param.m_nFontSize);
     m_address->setItemValue(strSection, "fontsize", strTmp);
-    m_address->setItemValue(strSection, "fgcolor", param.m_clrFg.name());
-    m_address->setItemValue(strSection, "bgcolor", param.m_clrBg.name());
-    m_address->setItemValue(strSection, "schemafile", param.m_strSchemaFile);
+    m_address->setItemValue(strSection, "schemefile", param.m_strSchemeFile);
 
     m_address->setItemValue(strSection, "termtype", param.m_strTerm);
     strTmp.setNum(param.m_nKey);
@@ -426,7 +424,7 @@ QString Global::getSaveFileName(const QString& filename, QWidget* widget)
 
     while (fi.exists()) {
         int yn = QMessageBox::warning(widget, "QTerm",
-                                      tr("File exists. Overwrite?"), "Yes", "No");
+                                      tr("File exists. Overwrite?"), tr("Yes"), tr("No"));
         if (yn == 0)
             break;
         strSave = QFileDialog::getSaveFileName(widget, tr("Choose a file to save under"), path + "/" + filename, "*");
@@ -471,8 +469,8 @@ bool Global::iniWorkingDir(QString param)
     strcat(_addrCfg, "address.cfg");
     m_addrCfg = QString::fromLocal8Bit(_addrCfg);
 
-    QString pathSchema = m_pathCfg + "schema";
-    if (!isPathExist(pathSchema))
+    QString pathScheme = m_pathCfg + "scheme";
+    if (!isPathExist(pathScheme))
         return false;
     return true;
 }
@@ -492,13 +490,15 @@ bool Global::iniWorkingDir(QString param)
     fi.setFile(param);
     m_pathLib = fi.path() + '/';
 #else
+    QString prefix = QCoreApplication::applicationDirPath();
+    prefix.chop(3); // "bin"
     m_pathCfg = QDir::homePath() + "/.qterm/";
     if (!isPathExist(m_pathCfg))
         return false;
 
     // pathLib --- where datedir "pic", "cursor", "po"
     if (param.indexOf('/') == -1)
-        m_pathLib = QTERM_DATADIR"/";
+        m_pathLib = prefix + "share/qterm/";
     else {
         QFileInfo fi(param);
         if (fi.isSymLink())
@@ -507,9 +507,9 @@ bool Global::iniWorkingDir(QString param)
         param.truncate(param.lastIndexOf('/'));
         QString oldPath = QDir::currentPath();
         QDir::setCurrent(param);
-        dir.setPath(QTERM_BINDIR);
+        dir.setPath(QCoreApplication::applicationDirPath());
         if (dir == QDir::current())
-            m_pathLib = QTERM_DATADIR;
+            m_pathLib = prefix + "share/qterm/";
         else
             m_pathLib = QDir::currentPath();
         QDir::setCurrent(oldPath);
@@ -517,8 +517,8 @@ bool Global::iniWorkingDir(QString param)
     }
 #endif
 
-    QString pathSchema = m_pathCfg + "schema";
-    if (!isPathExist(pathSchema))
+    QString pathScheme = m_pathCfg + "scheme";
+    if (!isPathExist(pathScheme))
         return false;
 
 

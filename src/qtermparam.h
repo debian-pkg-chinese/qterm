@@ -50,15 +50,12 @@ public:
 	// ANSI Color
 	bool m_bAnsiColor;
 	// Font Name
-	QString m_strFontName;
+	QString m_strASCIIFontName;
+	QString m_strGeneralFontName;
 	// Font Size
 	int m_nFontSize;
-	// Background Color
-	QColor m_clrBg;
-	// Foreground Color
-	QColor m_clrFg;
-	// Schema File
-	QString m_strSchemaFile;
+	// Scheme File
+	QString m_strSchemeFile;
 // Terminal
 	// Terminal Type
 	QString m_strTerm;

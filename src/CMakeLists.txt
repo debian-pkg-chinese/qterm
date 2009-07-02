@@ -4,8 +4,13 @@ option(QTERM_ENABLE_SSH "Build SSH Support" ON)
 option(QTERM_ENABLE_DBUS "Build DBus Support" ON)
 option(QTERM_ENABLE_SCRIPT "Build Script Support" ON)
 option(QTERM_ENABLE_PHONON "Build Phonon Support" ON)
+option(QTERM_OLD_PHONON "Hack for Outdated Phonon Library" OFF)
 option(QTERM_ENABLE_TEST "Build the tests")
 option(QTERM_ENABLE_SCRIPT_DEBUGGER "Build ScriptDebugger Support")
+if(QT_VERSION_MINOR LESS 5)
+   message(STATUS "Script support will be disabled because you have an old version of Qt, consider update to Qt 4.5 at least.")
+   set(QTERM_ENABLE_SCRIPT OFF)
+endif(QT_VERSION_MINOR LESS 5)
 if(QTERM_ENABLE_SSH)
    find_package(OpenSSLCrypto)
    if(OPENSSL_CRYPTO_FOUND)
@@ -64,6 +69,9 @@ if(QTERM_ENABLE_PHONON)
       add_definitions(-DPHONON_ENABLED)
       include_directories(${QT_PHONON_INCLUDE_DIR})
       set(optionalLibs ${optionalLibs} ${QT_PHONON_LIBRARY})
+      if(QTERM_OLD_PHONON OR QT_VERSION_MINOR LESS 5)
+         add_definitions(-DOLD_PHONON)
+      endif(QTERM_OLD_PHONON OR QT_VERSION_MINOR LESS 5)
    else(QT_PHONON_FOUND)
       # Looking for KDE4, it is quite impossible that some system can have
       # Phonon without KDE4
@@ -84,7 +92,7 @@ set(qterm_SRCS
    ui_msgdialog.h
    ui_prefdialog.h
    ui_quickdialog.h
-   ui_schemadialog.h
+   ui_schemedialog.h
    ui_soundconf.h
    ui_sshlogin.h
    ui_shortcutsdialog.h
@@ -124,7 +132,7 @@ set(qterm_SRCS
    qtermzmodem.cpp
    qtermglobal.cpp
    quickdialog.cpp
-   schemadialog.cpp
+   schemedialog.cpp
    shortcutsdialog.cpp
    statusBar.cpp
    toolbardialog.cpp
@@ -141,7 +149,7 @@ set(qterm_UIS
    ui/msgdialog.ui
    ui/prefdialog.ui
    ui/quickdialog.ui
-   ui/schemadialog.ui
+   ui/schemedialog.ui
    ui/shortcutsdialog.ui
    ui/soundconf.ui
    ui/sshlogin.ui
@@ -200,7 +208,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qterm.desktop DESTINATION share/applic
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/qterm.png DESTINATION share/icons)
 add_subdirectory(pic)
 add_subdirectory(cursor)
-add_subdirectory(schema)
+add_subdirectory(scheme)
 add_subdirectory(scripts)
 add_subdirectory(po)
 add_dependencies(qterm translations_target)

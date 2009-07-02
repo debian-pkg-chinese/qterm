@@ -25,7 +25,8 @@ namespace QTerm
 StateOption Decode::normalState[] = {
     { CHAR_CR,   &Decode::cr,   normalState },
     { CHAR_LF,   &Decode::lf,   normalState },
-    { CHAR_FF,   &Decode::ff,   normalState },
+    { CHAR_FF,   &Decode::lf,   normalState },
+    { CHAR_VT,   &Decode::lf,   normalState },
     { CHAR_TAB,  &Decode::tab,   normalState },
     { CHAR_BS,   &Decode::bs,   normalState },
     { CHAR_BELL,   &Decode::bell,   normalState },
@@ -37,11 +38,16 @@ StateOption Decode::normalState[] = {
 // only for BBS, so I reduce a lots
 StateOption Decode::escState[] = {
     { '[',   &Decode::clearParam,    bracketState },
-    // VT52
+    { ']',   &Decode::terminalAttribute,    normalState },
+    // VT100
     { 'D',   &Decode::index,  normalState },
     { 'E',   &Decode::lf,  normalState },
     { 'M',   &Decode::reverseIndex,  normalState },
-    { 'Z',  &Decode::test,    normalState },
+    { '7',   &Decode::saveCursor,  normalState },
+    { '8',   &Decode::restoreCursor,  normalState },
+    { 'H',  &Decode::test,    normalState }, //changeTabStop
+    { 'Z',  &Decode::test,    normalState }, //reportTerminalType
+    { 'c',  &Decode::test,    normalState }, //reset
     { '>',  &Decode::test,    normalState },
     { '<',  &Decode::test,    normalState },
     { CHAR_NORMAL,  0,       normalState }
@@ -68,6 +74,7 @@ StateOption Decode::bracketState[] = {
     { 'C',   &Decode::cursorRight,  normalState },
     { 'D',   &Decode::cursorLeft,  normalState },
     { 'H',   &Decode::cursorPosition,   normalState },
+    { 'I',   &Decode::tab,   normalState },
     { 'J',   &Decode::eraseScreen,  normalState },
     { 'K',   &Decode::eraseLine,  normalState },
     { 'L',   &Decode::insertLine,  normalState },
@@ -85,7 +92,8 @@ StateOption Decode::bracketState[] = {
 
     { CHAR_CR,   &Decode::cr,   bracketState },
     { CHAR_LF,   &Decode::lf,   bracketState },
-    { CHAR_FF,   &Decode::ff,   bracketState },
+    { CHAR_FF,   &Decode::lf,   bracketState },
+    { CHAR_VT,   &Decode::lf,   bracketState },
     { CHAR_TAB,   &Decode::tab,   bracketState },
     { CHAR_BS,    &Decode::bs,   bracketState },
     { CHAR_BELL,  &Decode::bell,   bracketState },
@@ -242,7 +250,11 @@ void Decode::ff()
 
 void Decode::tab()
 {
-    m_pBuffer->tab();
+    int n = 1;
+    if (bParam)
+        n = param[0];
+    for (int i = 0; i < n; i++)
+        m_pBuffer->tab();
 }
 
 void Decode::bs()
@@ -579,6 +591,15 @@ void Decode::restoreMode()
     }
 }
 
+void Decode::terminalAttribute()
+{
+    dataIndex++;
+    int n = 0;
+    while ((inputData[dataIndex + n] != CHAR_BELL) && (dataIndex + n) < inputLength)
+        n++;
+    //QStringList attributes = m_decoder->toUnicode(inputData+dataIndex, n - 1).split(";");
+    dataIndex += n;
+}
 
 void Decode::test()
 {

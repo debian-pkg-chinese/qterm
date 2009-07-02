@@ -59,7 +59,7 @@ int BBS::getScreenStart()
     return m_nScreenStart;
 }
 
-bool BBS::setCursorPos(const QPoint& pt, QRect& rc)
+bool BBS::setCursorPos(const QPoint& pt, QRect& rc_old, QRect& rc_new)
 {
     QRect rectOld = getSelectRect();
 
@@ -69,7 +69,8 @@ bool BBS::setCursorPos(const QPoint& pt, QRect& rc)
 
     QRect rectNew = getSelectRect();
 
-    rc = rectOld | rectNew;
+    rc_old = rectOld;
+    rc_new = rectNew;
 
     return rectOld != rectNew;
 }
@@ -219,7 +220,7 @@ bool BBS::isSelected(int index)
     if (rect.isNull())
         return false;
 
-    return (index == rect.y());
+    return (index >= rect.top() && index <= rect.bottom());
 
 }
 
@@ -231,7 +232,8 @@ bool BBS::isSelected(const QPoint& pt)
     if (rect.isNull())
         return false;
 
-    return (pt.y() == rect.y() &&
+    return (pt.y() >= rect.top() &&
+            pt.y() <= rect.bottom() &&
             pt.x() >= rect.left() &&
             pt.x() <= rect.right());
 }
@@ -256,6 +258,33 @@ void BBS::updateSelectRect()
         m_rcSelection = rect;
         return;
     }
+
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL) {
+        m_scriptHelper->setAccepted(false);
+        rect.setRect(0,0,0,0);
+        int x = m_ptCursor.x();
+        int y = m_ptCursor.y() - m_nScreenStart;
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("setSelectRect");
+        if (func.isFunction()) {
+            QScriptValue rectArray = func.call(QScriptValue(), QScriptValueList() << x << y);
+            if (m_scriptHelper->accepted() && rectArray.isArray()) {
+                rect.setX(rectArray.property(0).toInteger()); // x
+                rect.setY(rectArray.property(1).toInteger() + m_nScreenStart); //y
+                rect.setWidth(rectArray.property(2).toInteger());
+                rect.setHeight(rectArray.property(3).toInteger());
+                m_rcSelection = rect;
+                return;
+            }
+        } else {
+            qDebug("setSelectRect is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
 
     TextLine * line = NULL;
 
@@ -322,55 +351,6 @@ void BBS::updateSelectRect()
         break;
     }
 
-#ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL) {
-        m_scriptHelper->setAccepted(false);
-        rect.setRect(0,0,0,0);
-        int x = m_ptCursor.x();
-        int y = m_ptCursor.y() - m_nScreenStart;
-        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("isLineClickable");
-        if (func.isFunction()) {
-            bool clickable = func.call(QScriptValue(), QScriptValueList() << x << y).toBool();
-            if (m_scriptHelper->accepted()) {
-                if (clickable) {
-                    rect.setX(0);
-                    rect.setY(m_ptCursor.y());
-                    rect.setWidth(m_pBuffer->columns());
-                    rect.setHeight(1);
-                }
-                m_rcSelection = rect;
-                return;
-            }
-        } else {
-            qDebug("isLineClickable is not a function");
-        }
-        func = m_scriptEngine->globalObject().property("QTerm").property("getClickableString");
-        if (func.isFunction()) {
-            line = m_pBuffer->at(m_ptCursor.y());
-            QString clickableString = func.call(QScriptValue(), QScriptValueList() << x << y).toString();
-            if (m_scriptHelper->accepted()) {
-                if (!clickableString.isEmpty()) {
-                    int index = line->getText().indexOf(clickableString);
-                    int rectx = line->beginIndex(index);
-                    int width = line->beginIndex(index+clickableString.length()) - rectx;
-                    rect.setX(rectx);
-                    rect.setY(m_ptCursor.y());
-                    rect.setWidth(width);
-                    rect.setHeight(1);
-                }
-                m_rcSelection = rect;
-                return;
-            }
-
-        } else {
-            qDebug("getClickableString is not a function");
-        }
-        if (m_scriptEngine->hasUncaughtException()) {
-            QScriptValue exception = m_scriptEngine->uncaughtException();
-            qDebug() << "Exception: " << exception.toString();
-        }
-    }
-#endif
 
     m_rcSelection = rect;
 }
