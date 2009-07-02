@@ -112,7 +112,7 @@ void DAThread::run()
         // check it there is duplicated string
         // it starts from the end in the range of one screen height
         // so this is a non-greedy match
-        QString strTemp = pWin->m_pBuffer->screen(0)->getText().simplified();
+        QString strTemp = pWin->m_pBuffer->screen(0)->getText().replace(QRegExp("\\s+$"),"");
         int i = 0;
         int start = 0;
         QStringList::Iterator it = strList.end();
@@ -121,13 +121,14 @@ void DAThread::run()
 //    it!=strList.begin(), i < pWin->m_pBuffer->line()-1; // not exceeeding the last screen
 //    --it, i++)
             --it;
+            i++;
             if (*it != strTemp)
                 continue;
             QStringList::Iterator it2 = it;
             bool dup = true;
             // match more to see if its duplicated
-            for (int j = 0; j <= i; j++, it2++) {
-                QString str1 = pWin->m_pBuffer->screen(j)->getText().simplified();
+            for (int j = 0; j <= i && it2 != strList.end(); j++, it2++) {
+                QString str1 = pWin->m_pBuffer->screen(j)->getText().replace(QRegExp("\\s+$"),"");
                 if (*it2 != str1) {
                     dup = false;
                     break;
@@ -141,7 +142,7 @@ void DAThread::run()
         }
         // add new lines
         for (i = start;i < pWin->m_pBuffer->line() - 1;i++)
-            strList += pWin->m_pBuffer->screen(i)->getText().simplified();
+            strList += pWin->m_pBuffer->screen(i)->getText().replace(QRegExp("\\s+$"),"");
 
         // the end of article
         if (pWin->m_pBuffer->screen(
@@ -154,7 +155,6 @@ void DAThread::run()
             emit done(DAE_TIMEOUT);
             break;
         }
-        i++;
     }
 #if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
     strArticle = strList.join("\r\n");
@@ -352,7 +352,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_ipTimer, SIGNAL(timeout()), this, SLOT(showIP()));
     m_updateTimer = new QTimer;
     m_updateTimer->setSingleShot(true);
-    connect(m_updateTimer, SIGNAL(timeout()), this, SLOT(updateProcess()));
+    connect(m_updateTimer, SIGNAL(timeout()), this, SLOT(updateWindow()));
 
 
 // initial varibles
@@ -428,6 +428,7 @@ Window::~Window()
     delete m_pSound;
     delete m_hostInfo;
 #ifdef SCRIPTTOOLS_ENABLED
+    m_scriptEngine->abortEvaluation();
     delete m_scriptDebugger;
 #endif
 }
@@ -516,12 +517,6 @@ void Window::blinkTab()
     static bool bVisible = TRUE;
     m_pFrame->wndmgr->blinkTheTab(this, bVisible);
     bVisible = !bVisible;
-}
-
-void Window::updateProcess()
-{
-// set page state
-    m_pBBS->updateUrlList();
 }
 
 /* ------------------------------------------------------------------------ */
@@ -671,9 +666,11 @@ void Window::mouseMoveEvent(QMouseEvent * me)
 
     if (m_bMouse && m_bConnected) {
         // set cursor pos, repaint if state changed
-        QRect rect;
-        if (m_pBBS->setCursorPos(m_pScreen->mapToChar(me->pos()), rect))
-            m_pScreen->repaint(m_pScreen->mapToRect(rect));
+        QRect rect_old, rect_new;
+        if (m_pBBS->setCursorPos(m_pScreen->mapToChar(me->pos()), rect_old, rect_new)) {
+            m_pScreen->repaint(m_pScreen->mapToRect(rect_new));
+            m_pScreen->repaint(m_pScreen->mapToRect(rect_old));
+        }
         // judge if URL
         QRect rcOld;
         QRect rcOld_IP;
@@ -922,22 +919,7 @@ void Window::keyPressEvent(QKeyEvent * e)
         m_pTelnet->write(cstrTmp, cstrTmp.length());
     }
 }
-/*
-void Window::imStartEvent(QIMEvent * e)
-{
- m_pScreen->imStartEvent(e);
-}
 
-void Window::imComposeEvent(QIMEvent * e)
-{
- m_pScreen->imComposeEvent(e);
-}
-
-void Window::imEndEvent(QIMEvent * e)
-{
- m_pScreen->imEndEvent(e);
-}
-*/
 //connect slot
 void Window::connectHost()
 {
@@ -989,137 +971,21 @@ void Window::readReady(int size)
     if (m_pZmodem->transferstate == NoTransfer) {
         //decode
         m_pDecode->decode(str, size);
-
-#ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
-        m_scriptHelper->setAccepted(false);
-        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onNewData");
-        if (func.isFunction()) {
-            func.call();
-            if (m_scriptHelper->accepted()) {
-                return;
-            }
-        } else {
-            qDebug("onNewData is not a function");
-        }
-        if (m_scriptEngine->hasUncaughtException()) {
-            QScriptValue exception = m_scriptEngine->uncaughtException();
-            qDebug() << "Exception: " << exception.toString();
-        }
+        if (m_pDecode->bellReceive()) // Better way to determing the message?
+            m_bMessage = true;
     }
-#endif
 
-        if (m_bDoingLogin) {
-            int n = m_pBuffer->caret().y();
-            for (int y = n - 5;y < n + 5;y++) {
-                y = qMax(0, y);
-                TextLine *pTextLine = m_pBuffer->screen(y);
-                if (pTextLine == NULL)
-                    continue;
-                QString str = pTextLine->getText();
-                if (str.indexOf("guest") != -1 && str.indexOf("new") != -1) {
-                    doAutoLogin();
-                    break;
-                }
-            }
-        }
-        // page complete when caret at the right corner
-        // this works for most but not for all
-        TextLine * pTextLine = m_pBuffer->screen(m_pBuffer->line() - 1);
+    //delete the buf
+    delete []str;
+    delete []raw_str;
 
-        QString strText = pTextLine->getText().simplified();
-        if (m_pBuffer->caret().y() == m_pBuffer->line() - 1 &&
-                m_pBuffer->caret().x() >= strText.length() - 1)
-            m_wcWaiting.wakeAll();
+    if (m_pZmodem->transferstate == TransferStop)
+        m_pZmodem->transferstate = NoTransfer;
 
-        //QToolTip::remove(this, m_pScreen->mapToRect(m_rcUrl));
+    m_updateTimer->start(0);
 
-        // message received
-        // 03/19/2003. the caret posion removed as a message judgement
-        // because smth.org changed
-        if (m_pDecode->bellReceive()) { //&& m_pBuffer->caret().y()==1 )
-            if (m_bBeep) {
-#ifdef PHONON_ENABLED
-                if (Global::instance()->m_pref.strPlayer.isEmpty()) {
-                    m_pSound = new PhononSound(Global::instance()->m_pref.strWave, this);
-                } else
-#endif // PHONON_ENABLED
-                {
-                    m_pSound = new ExternalSound(Global::instance()->m_pref.strPlayer,
-                                                 Global::instance()->m_pref.strWave, this);
-            }
-            if (m_pSound)
-                m_pSound->play();
-            delete m_pSound;
-            m_pSound = NULL;
-        }
-        if (Global::instance()->m_pref.bBlinkTab)
-            m_tabTimer->start(500);
-
-        QString strMsg = m_pBBS->getMessage();
-        if (!strMsg.isEmpty())
-            m_strMessage += strMsg + "\n\n";
-
-        m_bMessage = true;
-
-        if (!isActiveWindow() || m_pFrame->wndmgr->activeWindow() != this)
-        {
-#ifdef DBUS_ENABLED
-            if (DBus::instance()->notificationAvailable()) {
-                QList<DBus::Action> actions;
-                actions.append(DBus::Show_QTerm);
-                DBus::instance()->sendNotification("New Message in QTerm", strMsg, actions);
-            } else
-#endif //DBUS_ENABLED
-            {
-                m_popWin->setText(strMsg);
-                m_popWin->popup();
-            }
-        }
-    if (m_bAutoReply) {
-#ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
-        m_scriptHelper->setAccepted(false);
-        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("autoReply");
-        if (func.isFunction()) {
-            func.call();
-            if (m_scriptHelper->accepted()) {
-                return;
-            } else {
-                // TODO: save messages
-                if (m_bIdling)
-                    replyMessage();
-                else
-                    m_replyTimer->start(m_param.m_nMaxIdle*1000 / 2);
-            }
-        } else {
-            qDebug("autoReply is not a function");
-        }
-        if (m_scriptEngine->hasUncaughtException()) {
-            QScriptValue exception = m_scriptEngine->uncaughtException();
-            qDebug() << "Exception: " << exception.toString();
-        }
-    }
-#endif
-    }
-    //m_pFrame->buzz();
 }
 
-m_pBBS->setPageState();
-m_pBBS->updateSelectRect();
-m_updateTimer->start(100);
-//refresh screen
-m_pScreen->m_ePaintState = Screen::NewData;
-m_pScreen->update();
-}
-
-//delete the buf
-delete []str;
-delete []raw_str;
-
-if (m_pZmodem->transferstate == TransferStop)
-    m_pZmodem->transferstate = NoTransfer;
-}
 
 void Window::ZmodemState(int type, int value, const QString& msg)
 {
@@ -1411,37 +1277,32 @@ void Window::copyArticle()
     m_pDAThread->start();
 
 }
-void Window::font()
-{
-    bool ok;
 
-    QResizeEvent* re = new QResizeEvent(m_pScreen->size(), m_pScreen->size());
-
-    QFont font = QFontDialog::getFont(&ok, m_pScreen->getDispFont());
-    if (ok == true) {
-        m_pScreen->setDispFont(font);
-        QApplication::postEvent(m_pScreen, re);
-    }
-}
-
-
-void Window::color()
+void Window::appearance()
 {
     addrDialog set(this, true);
+    int fontSize = m_param.m_nFontSize;
+    QString schemeFile = m_param.m_strSchemeFile;
 
     set.param = m_param;
     set.updateData(false);
     set.ui.tabWidget->setCurrentIndex(1);
+    connect(set.ui.asciiFontComboBox, SIGNAL(currentFontChanged(const QFont &)), m_pScreen, SLOT(asciiFontChanged(const QFont &)));
+    connect(set.ui.generalFontComboBox, SIGNAL(currentFontChanged(const QFont &)), m_pScreen, SLOT(generalFontChanged(const QFont &)));
+    connect(set.ui.fontSizeSpinBox, SIGNAL(valueChanged(int)), m_pScreen, SLOT(fontSizeChanged(int)));
+    connect(set.ui.schemeComboBox, SIGNAL(currentIndexChanged(int)), m_pScreen, SLOT(schemeChanged(int)));
 
     if (set.exec() == 1) {
         m_param = set.param;
         m_bSetChanged = true;
-
-        QResizeEvent* re = new QResizeEvent(m_pScreen->size(), m_pScreen->size());
-        m_pScreen->setSchema();
-        QApplication::postEvent(m_pScreen, re);
+    } else {
+        m_param.m_nFontSize = fontSize;
+        m_param.m_strSchemeFile = schemeFile;
     }
-
+    m_pScreen->setScheme();
+    m_pScreen->initFontMetrics();
+    QResizeEvent* re = new QResizeEvent(m_pScreen->size(), m_pScreen->size());
+    QApplication::postEvent(m_pScreen, re);
 }
 
 void Window::disconnect()
@@ -1487,15 +1348,19 @@ void Window::debugConsole()
 #endif
 }
 
-void Window::runScript()
+void Window::runScript(const QString & filename)
 {
-    // get the previous dir
-    QString file = Global::instance()->getOpenFileName("Script Files (*.js *.txt)", this);
-
+#ifdef SCRIPT_ENABLED
+    QString file = filename;
+    if (file.isEmpty()){
+        // get the previous dir
+        file= Global::instance()->getOpenFileName("Script Files (*.js *.txt)", this);
+    }
     if (file.isEmpty())
         return;
 
-    loadScriptFile(file);
+    m_scriptHelper->loadScriptFile(file);
+#endif
 }
 
 void Window::stopScript()
@@ -1536,12 +1401,10 @@ void Window::setting()
     if (set.exec() == 1) {
         m_param = set.param;
         m_bSetChanged = true;
-        if (m_param.m_bAutoFont) {
-            m_pBuffer->setSize(m_param.m_nCol, m_param.m_nRow);
-            m_pScreen->updateFont();
-            m_pScreen->m_ePaintState = Screen::Show;
-            m_pScreen->update();
-        }
+        m_pScreen->setScheme();
+        m_pScreen->initFontMetrics();
+        QResizeEvent* re = new QResizeEvent(m_pScreen->size(), m_pScreen->size());
+        QApplication::postEvent(m_pScreen, re);
     }
 }
 
@@ -1788,41 +1651,13 @@ void Window::initScript()
     if (!m_param.m_bLoadScript)
         return;
     m_pBBS->setScript(m_scriptEngine, m_scriptHelper);
-    QFile file(m_param.m_strScriptFile);
-    file.open(QIODevice::ReadOnly);
-    QString scripts = QString::fromUtf8(file.readAll());
-    file.close();
-    if (!m_scriptEngine->canEvaluate(scripts))
-        qDebug() << "Cannot evaluate the scripts";
-    m_scriptEngine->evaluate(scripts);
-    if (m_scriptEngine->hasUncaughtException()) {
-        QScriptValue exception = m_scriptEngine->uncaughtException();
-        qDebug() << "Exception: " << exception.toString();
-    }
-    m_scriptHelper->addImportedScript(file.fileName());
+    m_scriptHelper->import(m_param.m_strScriptFile);
     QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("init");
     if (!func.isFunction()) {
         qDebug() << "init is not a function";
     }
     func.call();
 #endif // SCRIPT_ENABLED
-}
-
-void Window::loadScriptFile(const QString & filename)
-{
-#ifdef SCRIPT_ENABLED
-    QFile file(filename);
-    file.open(QIODevice::ReadOnly);
-    QString scripts = QString::fromUtf8(file.readAll());
-    file.close();
-    if (!m_scriptEngine->canEvaluate(scripts))
-        qDebug() << "Cannot evaluate this script";
-    m_scriptEngine->evaluate(scripts);
-    if (m_scriptEngine->hasUncaughtException()) {
-        QScriptValue exception = m_scriptEngine->uncaughtException();
-        qDebug() << "Exception: " << exception.toString();
-    }
-#endif
 }
 
 void Window::inputHandle(const QString & text)
@@ -1891,6 +1726,133 @@ QMenu * Window::popupMenu()
 QMenu * Window::urlMenu()
 {
     return m_pUrl;
+}
+
+void Window::updateWindow()
+{
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onNewData");
+        if (func.isFunction()) {
+            func.call();
+            if (m_scriptHelper->accepted()) {
+                return;
+            }
+        } else {
+            qDebug("onNewData is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
+
+        if (m_bDoingLogin) {
+            int n = m_pBuffer->caret().y();
+            for (int y = n - 5;y < n + 5;y++) {
+                y = qMax(0, y);
+                TextLine *pTextLine = m_pBuffer->screen(y);
+                if (pTextLine == NULL)
+                    continue;
+                QString str = pTextLine->getText();
+                if (str.indexOf("guest") != -1 && str.indexOf("new") != -1) {
+                    doAutoLogin();
+                    break;
+                }
+            }
+        }
+        // page complete when caret at the right corner
+        // this works for most but not for all
+        TextLine * pTextLine = m_pBuffer->screen(m_pBuffer->line() - 1);
+
+        QString strText = pTextLine->getText().replace(QRegExp("\\s+$"),"");
+        if (m_pBuffer->caret().y() == m_pBuffer->line() - 1 &&
+                m_pBuffer->caret().x() >= strText.length() - 1)
+            m_wcWaiting.wakeAll();
+
+        //QToolTip::remove(this, m_pScreen->mapToRect(m_rcUrl));
+
+        // message received
+        // 03/19/2003. the caret posion removed as a message judgement
+        // because smth.org changed
+        if (m_bMessage) {
+            if (m_bBeep) {
+#ifdef PHONON_ENABLED
+                if (Global::instance()->m_pref.strPlayer.isEmpty()) {
+                    m_pSound = new PhononSound(Global::instance()->m_pref.strWave, this);
+                } else
+#endif // PHONON_ENABLED
+                {
+                    m_pSound = new ExternalSound(Global::instance()->m_pref.strPlayer,
+                                                 Global::instance()->m_pref.strWave, this);
+                }
+                if (m_pSound)
+                    m_pSound->play();
+                delete m_pSound;
+                m_pSound = NULL;
+            }
+            if (Global::instance()->m_pref.bBlinkTab)
+                m_tabTimer->start(500);
+
+            QString strMsg = m_pBBS->getMessage();
+            if (!strMsg.isEmpty())
+                m_strMessage += strMsg + "\n\n";
+
+
+            if (!isActiveWindow() || m_pFrame->wndmgr->activeWindow() != this)
+            {
+#ifdef DBUS_ENABLED
+                if (DBus::instance()->notificationAvailable()) {
+                    QList<DBus::Action> actions;
+                    actions.append(DBus::Show_QTerm);
+                    DBus::instance()->sendNotification("New Message in QTerm", strMsg, actions);
+                } else
+#endif //DBUS_ENABLED
+                {
+                    m_popWin->setText(strMsg);
+                    m_popWin->popup();
+                }
+            }
+        if (m_bAutoReply) {
+#ifdef SCRIPT_ENABLED
+            if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+                m_scriptHelper->setAccepted(false);
+                QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("autoReply");
+                if (func.isFunction()) {
+                    func.call();
+                    if (m_scriptHelper->accepted()) {
+                        return;
+                    } else {
+                        // TODO: save messages
+                        if (m_bIdling)
+                            replyMessage();
+                        else
+                            m_replyTimer->start(m_param.m_nMaxIdle*1000 / 2);
+                    }
+                } else {
+                    qDebug("autoReply is not a function");
+                }
+                if (m_scriptEngine->hasUncaughtException()) {
+                    QScriptValue exception = m_scriptEngine->uncaughtException();
+                    qDebug() << "Exception: " << exception.toString();
+                }
+            }
+#endif
+        }
+        //m_pFrame->buzz();
+    }
+
+    m_pBBS->setPageState();
+    m_pBBS->updateSelectRect();
+    // set page state
+    m_pBBS->updateUrlList();
+    //m_updateTimer->start(100);
+    //refresh screen
+    m_pScreen->m_ePaintState = Screen::NewData;
+    m_pScreen->update();
+    m_bMessage = false;
 }
 
 }

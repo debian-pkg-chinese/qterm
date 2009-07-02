@@ -333,11 +333,14 @@ void Frame::windowsMenuAboutToShow()
 #endif
 
     QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
+    QActionGroup * windowsGroup = new QActionGroup(this);
+    windowsGroup->setExclusive(true);
     for (int i = 0; i < int(windows.count()); ++i) {
         QAction * idAction = windowsMenu->addAction(windows.at(i)->windowTitle(),
                              this, SLOT(windowsMenuActivated()));
         idAction->setCheckable(true);
         idAction->setData(i);
+        windowsGroup->addAction(idAction);
         idAction->setChecked(m_MdiArea->activeSubWindow() == windows.at(i));
     }
 
@@ -545,14 +548,9 @@ void Frame::updateCodec(QAction * action)
     }
 }
 
-void Frame::font()
+void Frame::appearance()
 {
-    wndmgr->activeWindow()->font();
-}
-
-void Frame::color()
-{
-    wndmgr->activeWindow()->color();
+    wndmgr->activeWindow()->appearance();
 
 }
 void Frame::refresh()
@@ -800,7 +798,7 @@ void Frame::keyClicked(int id)
     if (strTmp[0] == '0') { // key
         wndmgr->activeWindow()->externInput(strTmp.mid(1));
     } else if (strTmp[0] == '1') { // script
-        wndmgr->activeWindow()->loadScriptFile(strTmp.mid(1));
+        wndmgr->activeWindow()->runScript(strTmp.mid(1));
     } else if (strTmp[0] == '2') { // program
         system((strTmp.mid(1) + " &").toLocal8Bit());
     }
@@ -880,9 +878,9 @@ void Frame::initActions()
     m_connectAction->setObjectName("actionConnect");
     m_disconnectAction = new QAction(QPixmap(pathLib + "pic/disconnect.png"), tr("&Disconnect"), this);
     m_disconnectAction->setObjectName("actionDisconnect");
-    m_addressAction = new QAction(QPixmap(pathLib + "pic/addr.png"), tr("&Address Book"), this);
+    m_addressAction = new QAction(QPixmap(pathLib + "pic/addr.png"), tr("&Address Book..."), this);
     m_addressAction->setObjectName("actionAddress");
-    m_quickConnectAction = new QAction(QPixmap(pathLib + "pic/quick.png"), tr("&Quick Login"), this);
+    m_quickConnectAction = new QAction(QPixmap(pathLib + "pic/quick.png"), tr("&Quick Login..."), this);
     m_quickConnectAction->setObjectName("actionQuickConnect");
     m_printAction = new QAction(tr("&Print..."), this);
     m_printAction->setObjectName("actionPrint");
@@ -938,10 +936,8 @@ void Frame::initActions()
     codecGroup->addAction(m_S2TAction);
     codecGroup->addAction(m_T2SAction);
 
-    m_fontAction = new QAction(QPixmap(pathLib + "pic/fonts.png"), tr("&Font..."), this);
-    m_fontAction->setObjectName("actionFont");
-    m_colorAction = new QAction(QPixmap(pathLib + "pic/color.png"), tr("&Color..."), this);
-    m_colorAction->setObjectName("actionColor");
+    m_appearanceAction= new QAction(QPixmap(pathLib + "pic/appearance.png"), tr("&Appearance..."), this);
+    m_appearanceAction->setObjectName("actionAppearance");
     m_refreshAction = new QAction(QPixmap(pathLib + "pic/refresh.png"), tr("&Refresh"), this);
     m_refreshAction->setObjectName("actionRefresh");
 
@@ -1067,8 +1063,7 @@ void Frame::initActions()
     connect(escapeGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateESC(QAction*)));
     connect(codecGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateCodec(QAction*)));
 
-    connect(m_fontAction, SIGNAL(triggered()), this, SLOT(font()));
-    connect(m_colorAction, SIGNAL(triggered()), this, SLOT(color()));
+    connect(m_appearanceAction, SIGNAL(triggered()), this, SLOT(appearance()));
     connect(m_refreshAction, SIGNAL(triggered()), this, SLOT(refresh()));
 
     connect(langGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateLang(QAction*)));
@@ -1153,8 +1148,7 @@ void Frame::addMainMenu()
     QMenu * view = new QMenu(tr("&View"), this);
     mainMenu->addMenu(view);
 
-    view->addAction(m_fontAction);
-    view->addAction(m_colorAction);
+    view->addAction(m_appearanceAction);
     view->addAction(m_refreshAction);
     view->addSeparator();
 
@@ -1243,8 +1237,7 @@ QMenu * Frame::genPopupMenu(QWidget * owner)
     popupMenu->addAction(m_pasteAction);
     popupMenu->addAction(m_copyArticleAction);
     popupMenu->addSeparator();
-    popupMenu->addAction(m_fontAction);
-    popupMenu->addAction(m_colorAction);
+    popupMenu->addAction(m_appearanceAction);
     popupMenu->addSeparator();
     popupMenu->addAction(m_currentSessionAction);
     return popupMenu;
@@ -1286,8 +1279,7 @@ void Frame::enableMenuToolBar(bool enable)
     m_autoCopyAction->setEnabled(enable);
     m_wwrapAction->setEnabled(enable);
 
-    m_fontAction->setEnabled(enable);
-    m_colorAction->setEnabled(enable);
+    m_appearanceAction->setEnabled(enable);
     m_refreshAction->setEnabled(enable);
 
     m_currentSessionAction->setEnabled(enable);

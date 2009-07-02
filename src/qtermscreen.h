@@ -63,10 +63,11 @@ public:
     Screen(QWidget *parent, Buffer *buffer, Param *param, BBS *bbs);
     ~Screen();
 
-    void setSchema();
+    void setScheme();
 
-    QFont getDispFont();
-    void setDispFont(const QFont&);
+    QFont asciiFont();
+    QFont generalFont();
+    int fontSize();
 
     void setBgPxm(const QPixmap& pixmap, int nType = 0);
 
@@ -93,6 +94,10 @@ public slots:
     void bufferSizeChanged();
     void bossColor();
     void updateScrollBar();
+    void asciiFontChanged(const QFont & font);
+    void generalFontChanged(const QFont & font);
+    void fontSizeChanged(int size);
+    void schemeChanged(int index);
 
 protected:
     void initFontMetrics();
@@ -129,7 +134,7 @@ protected:
         return yLine*m_nCharHeight;
     }
 
-    void getFontMetrics(QFontMetrics *);
+    void getFontMetrics();
 
     QImage& fade(QImage&, float, const QColor&);
     /*
@@ -173,7 +178,8 @@ protected:
 //  QRubberBand * m_pBand;
 
     QColor m_color[16];
-    QFont *m_pFont;
+    QFont *m_pASCIIFont;
+    QFont *m_pGeneralFont;
     //QPixmap * m_pCanvas;
 
     int m_nCharAscent, m_nCharDescent, m_nCharWidth, m_nCharHeight;

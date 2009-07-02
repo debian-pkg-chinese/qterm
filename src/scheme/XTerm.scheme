@@ -1,14 +1,8 @@
 [General]
-version=1.7
+version=1.8
 
-[schema]
+[scheme]
 title=XTerm
-
-[image]
-name=
-type=0
-fade=#000000
-alpha=0
 
 [color]
 color0=#000000

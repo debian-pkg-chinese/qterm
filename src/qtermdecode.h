@@ -2,6 +2,7 @@
 #define QTERMDECODE_H
 
 #include <QtCore/QObject>
+#include <QtCore/QTextCodec>
 
 class QTextDecoder;
 
@@ -83,6 +84,8 @@ private:
 
     void saveMode();
     void restoreMode();
+
+    void terminalAttribute();
 
     void test();
 
