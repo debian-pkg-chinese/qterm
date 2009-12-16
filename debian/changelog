@@ -2,8 +2,9 @@ qterm (1:0.5.8-1) unstable; urgency=low
 
   * new upstream release.
   * change debian format to 3.0 (quilt).
+  * debian/control: bump standards version to 3.8.3.
 
- -- LI Daobing <lidaobing@debian.org>  Wed, 16 Dec 2009 21:26:13 +0800
+ -- LI Daobing <lidaobing@debian.org>  Wed, 16 Dec 2009 21:32:32 +0800
 
 qterm (1:0.5.7-1) unstable; urgency=low
 
