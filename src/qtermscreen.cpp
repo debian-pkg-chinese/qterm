@@ -342,7 +342,6 @@ void Screen::updateFont()
     marginw=marginh=0;
     if (Frame::instance()->isMaximized()||Frame::instance()->isFullScreen()) {
         marginw = (m_rcClient.width() - (m_pBuffer->columns()*m_nCharWidth))/2;
-        marginh = (m_rcClient.height() - (m_pBuffer->line()*m_nCharHeight))/2;
     }
     QPoint point = m_rcClient.topLeft();
     m_rcClient = QRect(point.x()+marginw, point.y()+marginh, m_pBuffer->columns()*m_nCharWidth, m_pBuffer->line()*m_nCharHeight);
@@ -368,7 +367,7 @@ void Screen::getFontMetrics()
         m_nCharWidth = (qMax(en, cn) + 1) / 2;
 
     m_nCharDelta = m_nCharWidth - cn/2;
-    m_nCharHeight = ascii_fm.height();
+    m_nCharHeight = qMax(ascii_fm.height(),general_fm.height());
     m_nCharAscent = ascii_fm.ascent();
     m_nCharDescent = ascii_fm.descent();
 }

@@ -23,18 +23,18 @@ Param::Param()
 	m_strPasswd = "";
 	m_strPostLogin = "";
 // Display
-	m_BBSCode = "UTF-8";
+	m_BBSCode = "GBK";
 	m_nDispCode = 0;
 	m_bAutoFont = 1;
 	m_bAlwaysHighlight = 0;
 	m_bAnsiColor = 1;
-	m_strASCIIFontName = "Nsimsun";
-	m_strGeneralFontName = "Nsimsun";
+	m_strASCIIFontName = "Monospace";
+	m_strGeneralFontName = "Monospace";
 	m_nFontSize = 14;
 	m_strSchemeFile = "";
 // Terminal
 	m_strTerm = "vt102";
-	m_nKey = 0;
+	m_strKeyboardProfile= "";
 	m_nCol = 80;
 	m_nRow = 24;
 	m_nScrollLines = 240;
@@ -87,7 +87,7 @@ Param::Param( const Param & param )
 	m_strSchemeFile = param.m_strSchemeFile;
 // Terminal
 	m_strTerm = param.m_strTerm;
-	m_nKey = param.m_nKey;
+	m_strKeyboardProfile = param.m_strKeyboardProfile;
 	m_nCol = param.m_nCol;
 	m_nRow = param.m_nRow;
 	m_nScrollLines = param.m_nScrollLines;
@@ -144,7 +144,7 @@ Param& Param::operator=(const Param& param)
 	m_strSchemeFile = param.m_strSchemeFile;
 // Terminal
 	m_strTerm = param.m_strTerm;
-	m_nKey = param.m_nKey;
+	m_strKeyboardProfile = param.m_strKeyboardProfile;
 	m_nCol = param.m_nCol;
 	m_nRow = param.m_nRow;
 	m_nScrollLines = param.m_nScrollLines;

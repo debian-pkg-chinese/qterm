@@ -191,10 +191,9 @@ bool Global::loadAddress(int n, Param& param)
     strTmp = m_address->getItemValue(strSection, "fontsize").toString();
     param.m_nFontSize = strTmp.toInt();
     param.m_strSchemeFile = m_address->getItemValue(strSection, "schemefile").toString();
+    param.m_strKeyboardProfile = m_address->getItemValue(strSection, "keyboardprofile").toString();
 
     param.m_strTerm = m_address->getItemValue(strSection, "termtype").toString();
-    strTmp = m_address->getItemValue(strSection, "keytype").toString();
-    param.m_nKey = strTmp.toInt();
     strTmp =  m_address->getItemValue(strSection, "column").toString();
     param.m_nCol = strTmp.toInt();
     strTmp =  m_address->getItemValue(strSection, "row").toString();
@@ -288,10 +287,9 @@ void Global::saveAddress(int n, const Param& param)
     strTmp.setNum(param.m_nFontSize);
     m_address->setItemValue(strSection, "fontsize", strTmp);
     m_address->setItemValue(strSection, "schemefile", param.m_strSchemeFile);
+    m_address->setItemValue(strSection, "keyboardprofile", param.m_strKeyboardProfile);
 
     m_address->setItemValue(strSection, "termtype", param.m_strTerm);
-    strTmp.setNum(param.m_nKey);
-    m_address->setItemValue(strSection, "keytype", strTmp);
     strTmp.setNum(param.m_nCol);
     m_address->setItemValue(strSection, "column", strTmp);
     strTmp.setNum(param.m_nRow);
@@ -575,11 +573,9 @@ bool Global::iniSettings()
             font.setPointSize(pointsize.toInt());
         if (pixelsize.toInt() > 0)
             font.setPixelSize(pixelsize.toInt());
-#if (QT_VERSION>=300)
         QString bAA = m_config->getItemValue("global", "antialias").toString();
         if (bAA != "0")
             font.setStyleStrategy(QFont::PreferAntialias);
-#endif
         qApp->setFont(font);
     }
 
