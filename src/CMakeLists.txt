@@ -7,10 +7,23 @@ option(QTERM_ENABLE_PHONON "Build Phonon Support" ON)
 option(QTERM_OLD_PHONON "Hack for Outdated Phonon Library" OFF)
 option(QTERM_ENABLE_TEST "Build the tests")
 option(QTERM_ENABLE_SCRIPT_DEBUGGER "Build ScriptDebugger Support")
-if(QT_VERSION_MINOR LESS 5)
-   message(STATUS "Script support will be disabled because you have an old version of Qt, consider update to Qt 4.5 at least.")
-   set(QTERM_ENABLE_SCRIPT OFF)
-endif(QT_VERSION_MINOR LESS 5)
+
+include(CheckFunctionExists)
+include(CheckLibraryExists)
+
+check_function_exists("gethostbyname" CMAKE_HAVE_GETHOSTBYNAME)
+if(NOT CMAKE_HAVE_GETHOSTBYNAME)
+  check_library_exists("nsl" "gethostbyname" "" CMAKE_LIB_NSL_HAS_GETHOSTBYNAME)
+  if(CMAKE_LIB_NSL_HAS_GETHOSTBYNAME)
+    set(optionalLibs ${optionalLibs} -lnsl)
+  else(CMAKE_LIB_NSL_HAS_GETHOSTBYNAME)
+    check_library_exists("bsd" "gethostbyname" "" CMAKE_LIB_BSD_HAS_GETHOSTBYNAME)
+    if(CMAKE_LIB_BSD_HAS_GETHOSTBYNAME)
+      set(optionalLibs ${optionalLibs} -lbsd)
+    endif(CMAKE_LIB_BSD_HAS_GETHOSTBYNAME)
+  endif(CMAKE_LIB_NSL_HAS_GETHOSTBYNAME)
+endif(NOT CMAKE_HAVE_GETHOSTBYNAME)
+
 if(QTERM_ENABLE_SSH)
    find_package(OpenSSLCrypto)
    if(OPENSSL_CRYPTO_FOUND)
@@ -58,7 +71,7 @@ if(QTERM_ENABLE_SCRIPT)
             include_directories(${QT_QTSCRIPTTOOLS_INCLUDE_DIR})
             set(optionalLibs ${optionalLibs} ${QT_QTSCRIPTTOOLS_LIBRARY})
          else(QT_QTSCRIPTTOOLS_FOUND)
-            message(STATUS "QtScriptTools module not found, make sure your Qt is higher than 4.5")
+            message(STATUS "QtScriptTools module not found, at least CMake 2.8 is needed to support it")
          endif(QT_QTSCRIPTTOOLS_FOUND)
       endif(QTERM_ENABLE_SCRIPT_DEBUGGER)
    endif(QT_QTSCRIPT_FOUND)
@@ -139,6 +152,7 @@ set(qterm_SRCS
    zmodemdialog.cpp
    hostinfo.cpp
    termstring.cpp
+   keyboardtranslator.cpp
    ${optionalSources})
 set(qterm_UIS
    ui/aboutdialog.ui
@@ -211,6 +225,7 @@ add_subdirectory(cursor)
 add_subdirectory(scheme)
 add_subdirectory(scripts)
 add_subdirectory(po)
+add_subdirectory(keyboard_profiles)
 add_dependencies(qterm translations_target)
 if(QTERM_ENABLE_TEST)
    add_subdirectory(test)

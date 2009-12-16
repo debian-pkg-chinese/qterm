@@ -14,7 +14,7 @@ class ScriptHelper : public QObject
 public:
     ScriptHelper(Window *parent, QScriptEngine *engine);
     ~ScriptHelper();
-    Q_PROPERTY(bool accepted READ accepted WRITE setAccepted);
+    Q_PROPERTY(bool accepted READ accepted WRITE setAccepted)
     void loadScriptFile(const QString&);
 public slots:
     bool accepted() const;
@@ -44,7 +44,7 @@ public slots:
     bool addUrlMenu(QString id, QString menuTitle, QString icon = "QTerm");
     void addPopupSeparator();
     void addUrlSeparator();
-    void import(const QString & filename);
+    void loadScript(const QString & filename);
     QString globalPath();
     QString localPath();
     QString getSelectedText(bool rect = false, bool color = false, const QString & escape = "");

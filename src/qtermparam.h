@@ -59,8 +59,8 @@ public:
 // Terminal
 	// Terminal Type
 	QString m_strTerm;
-	// Key Type
-	int m_nKey;			// 0--BBS 1--XTERM 2--VT100
+	// Keyboard Profile
+	QString m_strKeyboardProfile;
 	// Columns & Rows
 	int m_nCol, m_nRow;
 	// Scroll Lines

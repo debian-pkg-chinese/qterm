@@ -36,6 +36,7 @@ AUTHOR:        kingson fiasco
 #include "progressBar.h"
 #include "qtermglobal.h"
 #include "hostinfo.h"
+#include "keyboardtranslator.h"
 
 #ifdef SCRIPT_ENABLED
 #include "scripthelper.h"
@@ -247,6 +248,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_param = param;
     m_nAddrIndex = addr;
     m_hostInfo = NULL;
+    m_translator = NULL;
     QString pathLib = Global::instance()->pathLib();
     setMouseTracking(true);
 
@@ -259,6 +261,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 #endif // SCRIPT_ENABLED
 //init the textline list
 
+    m_codec = QTextCodec::codecForName(param.m_BBSCode.toLatin1());
     m_pBuffer = new Buffer(m_param.m_nRow, m_param.m_nCol, m_param.m_nScrollLines);
     if (param.m_nProtocolType == 0)
         m_pTelnet = new Telnet(m_param.m_strTerm,
@@ -277,9 +280,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_pBuffer, SIGNAL(windowSizeChanged(int, int)),
             m_pTelnet, SLOT(windowSizeChanged(int, int)));
     m_pZmDialog = new zmodemDialog(this);
-    m_pZmodem = new Zmodem(m_pTelnet, param.m_nProtocolType);
+    m_pZmodem = new Zmodem(this, m_pTelnet, m_codec, param.m_nProtocolType);
 
-    m_codec = QTextCodec::codecForName(param.m_BBSCode.toLatin1());
     if (m_codec == 0) {
         qDebug("Fallback to GBK codec");
         m_codec = QTextCodec::codecForName("GBK");
@@ -401,6 +403,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 
     initScript();
 
+    loadKeyboardTranslator(param.m_strKeyboardProfile);
+
     connectHost();
 }
 
@@ -437,12 +441,11 @@ Window::~Window()
 void Window::closeEvent(QCloseEvent * clse)
 {
     if (m_bConnected && Global::instance()->m_pref.bWarn) {
-        QMessageBox mb("QTerm",
+        QMessageBox mb(QMessageBox::Warning, "QTerm",
                        tr("Connected,Do you still want to exit?"),
-                       QMessageBox::Warning,
-                       QMessageBox::Yes | QMessageBox::Default,
-                       QMessageBox::No  | QMessageBox::Escape ,
-                       0, this);
+                       QMessageBox::Yes | QMessageBox::No);
+        mb.setDefaultButton(QMessageBox::Yes);
+        mb.setEscapeButton(QMessageBox::No);
         if (mb.exec() == QMessageBox::Yes) {
             m_pTelnet->close();
             saveSetting();
@@ -867,57 +870,50 @@ void Window::keyPressEvent(QKeyEvent * e)
     if (m_replyTimer->isActive())
         m_replyTimer->stop();
 
-    if (e->modifiers() & Qt::MetaModifier) {
-        if (e->key() >= Qt::Key_A && e->key() <= Qt::Key_Z) {
-            char ch = e->key() & 0x1f;
-            m_pTelnet->write(&ch, 1);
+    Qt::KeyboardModifiers modifiers = e->modifiers();
+    KeyboardTranslator::States states = KeyboardTranslator::AnsiState;
+
+    if ( m_translator )
+    {
+    KeyboardTranslator::Entry entry = m_translator->findEntry(
+                                                e->key() ,
+                                                modifiers,
+                                                states );
+
+        // send result to terminal
+        QByteArray textToSend;
+
+        // special handling for the Alt (aka. Meta) modifier.  pressing
+        // Alt+[Character] results in Esc+[Character] being sent
+        // (unless there is an entry defined for this particular combination
+        //  in the keyboard modifier)
+        bool wantsAltModifier = entry.modifiers() & entry.modifierMask() & Qt::AltModifier;
+        bool wantsAnyModifier = entry.state() &
+                                entry.stateMask() & KeyboardTranslator::AnyModifierState;
+
+        if ( modifiers & Qt::AltModifier && !(wantsAltModifier || wantsAnyModifier)
+             && !e->text().isEmpty() )
+        {
+            textToSend.prepend("\033");
         }
-        return;
+
+        if ( entry.command() != KeyboardTranslator::NoCommand )
+        {
+            if (entry.command() & KeyboardTranslator::EraseCommand)
+                textToSend += "\x1b[3~";
+
+            // TODO command handling
+        }
+        else if ( !entry.text().isEmpty() )
+        {
+            textToSend += unicode2bbs(entry.text(true,modifiers));
+        }
+        else
+            textToSend += unicode2bbs(e->text());
+
+        m_pTelnet->write(textToSend, textToSend.length());
     }
 
-    // TODO get the input messages
-// if( m_bMessage && e->key()==Key_Return && m_pBuffer->caret().y()==1 )
-// {
-//  m_strMessage += m_pBuffer->screen(1)->getText()+"\n";
-// }
-
-    switch (e->key()) {
-    case Qt::Key_Home:
-        m_pTelnet->write(direction[0], 4);
-        return;
-    case Qt::Key_End:
-        m_pTelnet->write(direction[1], 4);
-        return;
-    case Qt::Key_PageUp:
-        m_pTelnet->write(direction[2], 4);
-        return;
-    case Qt::Key_PageDown:
-        m_pTelnet->write(direction[3], 4);
-        return;
-    case Qt::Key_Up:
-        m_pTelnet->write(direction[4], 3);
-        return;
-    case Qt::Key_Down:
-        m_pTelnet->write(direction[5], 3);
-        return;
-    case Qt::Key_Left:
-        m_pTelnet->write(direction[6], 3);
-        return;
-    case Qt::Key_Right:
-        m_pTelnet->write(direction[7], 3);
-        return;
-    case Qt::Key_Delete: // stupid
-        m_pTelnet->write("\x1b[3~", 4);
-        return;
-    default:
-        break;
-    }
-
-
-    if (e->text().length()) {
-        QByteArray cstrTmp = unicode2bbs(e->text());
-        m_pTelnet->write(cstrTmp, cstrTmp.length());
-    }
 }
 
 //connect slot
@@ -1590,12 +1586,11 @@ void Window::saveSetting()
     if (m_nAddrIndex == -1 || !m_bSetChanged)
         return;
 
-    QMessageBox mb("QTerm",
+    QMessageBox mb(QMessageBox::Warning, "QTerm",
                    tr("Setting changed do you want to save it?"),
-                   QMessageBox::Warning,
-                   QMessageBox::Yes | QMessageBox::Default,
-                   QMessageBox::No  | QMessageBox::Escape ,
-                   0, this);
+                   QMessageBox::Yes | QMessageBox::No);
+    mb.setDefaultButton(QMessageBox::Yes);
+    mb.setEscapeButton(QMessageBox::No);
     if (mb.exec() == QMessageBox::Yes) {
         Global::instance()->saveAddress(m_nAddrIndex, m_param);
     }
@@ -1651,7 +1646,7 @@ void Window::initScript()
     if (!m_param.m_bLoadScript)
         return;
     m_pBBS->setScript(m_scriptEngine, m_scriptHelper);
-    m_scriptHelper->import(m_param.m_strScriptFile);
+    m_scriptHelper->loadScript(m_param.m_strScriptFile);
     QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("init");
     if (!func.isFunction()) {
         qDebug() << "init is not a function";
@@ -1702,7 +1697,7 @@ void Window::saveLink()
 
 void Window::getHttpHelper(const QString& strUrl, bool bPreview)
 {
-    Http *pHttp = new Http(this);
+    Http *pHttp = new Http(this, m_codec);
     connect(pHttp, SIGNAL(done(QObject*)), this, SLOT(httpDone(QObject*)));
     connect(pHttp, SIGNAL(message(const QString &)), m_pMessage, SLOT(showText(const QString &)));
     pHttp->getLink(strUrl, bPreview);
@@ -1853,6 +1848,39 @@ void Window::updateWindow()
     m_pScreen->m_ePaintState = Screen::NewData;
     m_pScreen->update();
     m_bMessage = false;
+}
+
+void Window::loadKeyboardTranslator(const QString & filename)
+{
+    //const QString& path = name + ".keytab";
+    QFileInfo fi(filename);
+    QString path;
+    if (fi.exists()) {
+        path = filename;
+    } else {
+        qWarning() << "Fallback to default keyboard layout";
+        path = Global::instance()->pathLib() + "/keyboard_profiles/default.keytab";
+    }
+    fi.setFile(path);
+    QString name = fi.baseName();
+    QFile source(path);
+    if (name.isEmpty() || !source.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+    m_translator = new KeyboardTranslator(name);
+    KeyboardTranslatorReader reader(&source);
+    m_translator->setDescription( reader.description() );
+    while ( reader.hasNextEntry() )
+        m_translator->addEntry(reader.nextEntry());
+
+    source.close();
+
+    if ( reader.parseError() )
+    {
+        delete m_translator;
+        m_translator = NULL;
+        return;
+    }
+    qDebug() << "Keyboard translator:" << name << "loaded";
 }
 
 }
