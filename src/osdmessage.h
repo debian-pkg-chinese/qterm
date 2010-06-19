@@ -25,23 +25,26 @@ namespace QTerm
  */
 class PageViewMessage : public QWidget
 {
-	Q_OBJECT
-    public:
-		PageViewMessage( QWidget * parent );
+    Q_OBJECT
+public:
+    PageViewMessage(QWidget * parent);
 
-		enum Icon { None = 0, Info, Warning, Error, Find };
-		void display( const QString & message, Icon icon = Info, int durationMs = 4000 );
-    public slots:
-	void showText( const QString &);
+    enum Icon { None = 0, Info, Warning, Error, Find };
+    enum Type { Normal = 0, IP };
+    void display(const QString & message, Icon icon = Info, int durationMs = 4000, Type type = Normal);
+    Type type();
+public slots:
+    void showText(const QString &);
 
-    protected:
-		void paintEvent( QPaintEvent * e );
-		void mousePressEvent( QMouseEvent * e );
+protected:
+    void paintEvent(QPaintEvent * e);
+    void mousePressEvent(QMouseEvent * e);
 
-    private:
-		QPixmap m_pixmap;
-		QTimer * m_timer;
-		QString m_message;
+private:
+    QPixmap m_pixmap;
+    QTimer * m_timer;
+    QString m_message;
+    Type m_type;
 };
 
 } // namespace QTerm

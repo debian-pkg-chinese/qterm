@@ -19,46 +19,47 @@ namespace QTerm
 {
 class Canvas : public QScrollArea
 {
-	Q_OBJECT
-public: 
-	Canvas(QWidget *parent=NULL, Qt::WFlags f=Qt::Window);
-	~Canvas();
+    Q_OBJECT
+public:
+    Canvas(QWidget *parent = NULL, Qt::WFlags f = 0);
+    ~Canvas();
 
-	void loadImage(QString);
+    void loadImage(QString);
 
 protected slots:
-	void oriSize();
-	void zoomIn();
-	void zoomOut();
-	void fitWin();
-	void fullScreen();
-	void saveImage();
-	void copyImage();
-	void silentCopy();
-	void cwRotate();
-	void ccwRotate();
-	void deleteImage();
+    void oriSize();
+    void zoomIn();
+    void zoomOut();
+    void fitWin(bool);
+    void fullScreen();
+    void saveImage();
+    void copyImage();
+    void silentCopy();
+    void cwRotate();
+    void ccwRotate();
+    void deleteImage();
 protected:
-	void moveImage(float,float);
-	void resizeImage(float);
-	void rotateImage(float);
-	
-	void closeEvent(QCloseEvent *);
-	void mousePressEvent(QMouseEvent*);
-	void keyPressEvent(QKeyEvent *ke);
-	void viewportResizeEvent(QResizeEvent *re);
-	void adjustSize(const QSize&);
-	QPixmap scaleImage(const QSize&);
+    void moveImage(double, double);
+    void resizeImage(double);
+    void rotateImage(double);
+
+    void closeEvent(QCloseEvent *);
+    void mousePressEvent(QMouseEvent*);
+    void keyPressEvent(QKeyEvent *ke);
+    void resizeEvent(QResizeEvent *re);
+    void adjustSize(const QSize&);
+    QPixmap scaleImage(const QSize&);
 protected:
-	QLabel *label;
-	bool bFitWin;
-	QSize szImage;
-	QString strFileName;
-	QImage img;
-	QMenu *m_pMenu;
-	
+    QLabel *label;
+    bool bFitWin;
+    QSize szImage;
+    QString strFileName;
+    QImage img;
+    QMenu *m_pMenu;
+    QAction * m_fitAction;
+
 //Very dirty trick, I hate it
-	bool bEmbed;
+    bool bEmbed;
 };
 
 } // namespace QTerm

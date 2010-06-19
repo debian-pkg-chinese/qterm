@@ -1,5 +1,3 @@
-QTerm.loadExtension("qt.core");
-QTerm.loadExtension("qt.gui");
 QTerm.loadScript("utils.js");
 
 var SendDelay = SendDelay ? SendDelay : new Object;
@@ -9,18 +7,25 @@ SendDelay.t = new QTimer;
 
 SendDelay.q = new QEventLoop;
 
+SendDelay.text = "";
+SendDelay.times = 0;
+SendDelay.delay = 0;
+
 SendDelay.send = function(text, times, delay)
 {
+    SendDelay.text = text;
+    SendDelay.times = times;
+    SendDelay.delay = delay;
     for (var i = 0; i < times; i++) {
         this.addSendString(text);
     }
     this.t.start(delay);
     this.t.timeout.connect(this,this.sendOneChar);
-    QTerm.scriptEvent.connect(this,this.q.quit);
+    QTerm.eventFinished.connect(this,this.q.quit);
     this.q.exec();
-    QTerm.showMessage("Send String Finished", QTerm.OSDType.Info, 2000);
+    QTerm.showMessage("QTerm","Send String Finished");
     this.t.timeout.disconnect(this,this.sendOneChar);
-    QTerm.scriptEvent.disconnect(this,this.q.quit);
+    QTerm.eventFinished.disconnect(this,this.q.quit);
 }
 
 SendDelay.addSendString = function(str)
@@ -30,27 +35,43 @@ SendDelay.addSendString = function(str)
 
 SendDelay.sendOneChar = function()
 {
-    if (this.stringQueue.length == 0) {
-        this.t.stop();
-        QTerm.scriptEvent("Finished");
-        return;
-    }
     var text = this.stringQueue.shift();
     QTerm.sendParsedString(text);
+    if (this.stringQueue.length == 0) {
+        this.t.stop();
+        QTerm.eventFinished();
+        return;
+    }
 }
 
 QTerm.SendDelay = SendDelay;
 
 QTerm.onSendDelay = function()
 {
-    var text = QInputDialog.getText(this, "Send String With Delay", "String:", QLineEdit.Normal, "", Qt.WindowFlags(0));
-    var times = QInputDialog.getInteger(this, "Send String With Delay", "Times:", 1, 1, 10000, 1, Qt.WindowFlags(0));
-    var delay= QInputDialog.getInteger(this, "Send String With Delay", "Delay(s):", 1, 1, 10000, 1, Qt.WindowFlags(0)) * 1000;
-    QTerm.showMessage("send \""+text+"\" "+times+" times with "+delay+" ms delay", 1, 2000);
-    QTerm.SendDelay.send(text,times,delay);
+    var UIloader = new QUiLoader(this);
+    var uifile = new QFile(QTerm.findFile("ui/senddelay.ui"));
+    uifile.open(QIODevice.ReadOnly);
+    var dialog = UIloader.load(uifile, this);
+    uifile.close();
+
+    dialog.stringLineEdit.text = QTerm.SendDelay.text;
+    dialog.repeatingSpinBox.value = QTerm.SendDelay.times;
+    dialog.delaySpinBox.value = QTerm.SendDelay.delay/1000;
+
+    if ( dialog.exec() == 0 )
+        return;
+
+    var text = dialog.stringLineEdit.text;
+    var times = dialog.repeatingSpinBox.value;
+    var delay = dialog.delaySpinBox.value*1000;
+
+    if (text.length != 0 && times != 0) {
+        QTerm.osdMessage("send \""+text+"\" "+times+" times with "+delay+" ms delay", QTerm.OSDType.Info, 2000);
+        QTerm.SendDelay.send(text,times,delay);
+    }
 }
 
-if (QTerm.addPopupMenu( "sendDelay", "Send String With Delay..." ) ) {
+if (QTerm.addPopupMenu( "sendDelay", qsTr("Send String With Delay...") ) ) {
         QTerm.sendDelay.triggered.connect(QTerm.onSendDelay);
 }
 

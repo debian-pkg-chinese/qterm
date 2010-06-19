@@ -87,7 +87,7 @@ QString BBS::getMessage()
     message = (m_pBuffer->screen(0)->getText().simplified());
     line = m_pBuffer->screen(i);
     while (isUnicolor(line)) {
-        message += "\n" + (line->getText());
+        message += "\n" + (line->getText().simplified());
         i++;
         line = m_pBuffer->screen(i);
     }
@@ -424,7 +424,7 @@ bool BBS::checkUrl(QRect & rcUrl, QRect & rcOld)
             if (pt > url.first && pt < url.second) {
                 //qDebug() << "get text: " << getText(url.first, url.second);
                 m_strUrl = getText(url.first, url.second);
-                QRegExp urlRe("^(mailto:|(https?|mms|rstp|ftp|gopher|telnet|ed2k|file)://)");
+                QRegExp urlRe("(mailto:|(https?|mms|rstp|ftp|gopher|telnet|ed2k|file)://)");
                 QRegExp emailRe("^[A-Z0-9._%-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}");
                 if (urlRe.indexIn(m_strUrl)==-1) {
                     if (emailRe.indexIn(m_strUrl)==-1) {

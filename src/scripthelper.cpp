@@ -17,10 +17,28 @@
 namespace QTerm
 {
 ScriptHelper::ScriptHelper(Window * parent, QScriptEngine * engine)
-    :QObject(parent),m_accepted(false),m_scriptList(),m_popupActionList(),m_urlActionList()
+    :QObject(parent),m_accepted(false),m_qtbindingsAvailable(true),m_scriptList(),m_popupActionList(),m_urlActionList()
 {
     m_window = parent;
     m_scriptEngine = engine;
+    m_scriptEngine->installTranslatorFunctions();
+    QStringList allowedBindings;
+    allowedBindings << "qt.core" << "qt.gui" << "qt.sql" << "qt.xml" << "qt.uitools" << "qt.network" << "qt.webkit";
+    foreach( QString binding, allowedBindings )
+    {
+        QScriptValue error = engine->importExtension( binding );
+        if( error.isUndefined() )
+        { // undefined indiciates success
+            continue;
+        }
+
+        qDebug() << "Extension" << binding <<  "not found:" << error.toString();
+        qDebug() << "Available extensions:" << engine->availableExtensions();
+        qDebug() << "Some script functions will be disabled, considering install QtScriptBindings!";
+        m_qtbindingsAvailable = false;
+    }
+    if (m_qtbindingsAvailable)
+        qDebug() << "QtScriptBindings loaded, enjoy scripting!";
 }
 
 ScriptHelper::~ScriptHelper()
@@ -30,6 +48,11 @@ ScriptHelper::~ScriptHelper()
 bool ScriptHelper::accepted() const
 {
     return m_accepted;
+}
+
+bool ScriptHelper::qtbindingsAvailable() const
+{
+    return m_qtbindingsAvailable;
 }
 
 void ScriptHelper::setAccepted(bool accepted)
@@ -49,13 +72,13 @@ int ScriptHelper::caretY()
 
 int ScriptHelper::charX(int x, int y)
 {
-    QPoint pt = m_window->getScreen()->mapToChar(QPoint(x,y));
+    QPoint pt = m_window->screen()->mapToChar(QPoint(x,y));
     return pt.x();
 }
 
 int ScriptHelper::charY(int x, int y)
 {
-    QPoint pt = m_window->getScreen()->mapToChar(QPoint(x,y));
+    QPoint pt = m_window->screen()->mapToChar(QPoint(x,y));
     return pt.y() - m_window->m_pBBS->getScreenStart();
 }
 
@@ -119,9 +142,14 @@ void ScriptHelper::sendParsedString(const QString & string)
     m_window->sendParsedString(string);
 }
 
-void ScriptHelper::showMessage(const QString & message, int type, int duration)
+void ScriptHelper::osdMessage(const QString & message, int type, int duration)
 {
-    m_window->showMessage(message, type, duration);
+    m_window->osdMessage(message, type, duration);
+}
+
+void ScriptHelper::showMessage(const QString & title, const QString & message, int duration)
+{
+    m_window->showMessage(title, message, duration);
 }
 
 void ScriptHelper::cancelZmodem()
@@ -207,7 +235,7 @@ QString ScriptHelper::localPath()
     return Global::instance()->pathCfg();
 }
 
-void ScriptHelper::loadScript(const QString & filename)
+QString ScriptHelper::findFile(const QString & filename)
 {
     QFileInfo fileInfo(filename);
     if (!fileInfo.isAbsolute()) {
@@ -218,24 +246,35 @@ void ScriptHelper::loadScript(const QString & filename)
     }
     if (!fileInfo.exists()) {
         qDebug() << "Script file " << filename << "not found";
-        return;
+        return "";
     }
-    if (isScriptLoaded(fileInfo.absoluteFilePath())) {
-        qDebug() << "Script file " << fileInfo.absoluteFilePath() << "is already loaded";
-        return;
-    }
-    loadScriptFile(fileInfo.absoluteFilePath());
-    qDebug() << "load script file: " << filename;
-    addImportedScript(fileInfo.absoluteFilePath());
+    return fileInfo.absoluteFilePath();
 }
 
-void ScriptHelper::loadExtension(const QString & extension)
+void ScriptHelper::loadScript(const QString & filename)
+{
+    QString scriptFile = findFile(filename);
+    if (filename.isEmpty()) {
+        return;
+    }
+    if (isScriptLoaded(scriptFile)) {
+        qDebug() << "Script file " << scriptFile << "is already loaded";
+        return;
+    }
+    loadScriptFile(scriptFile);
+    qDebug() << "load script file: " << filename;
+    addImportedScript(scriptFile);
+}
+
+bool ScriptHelper::loadExtension(const QString & extension)
 {
     QScriptValue ret = m_scriptEngine->importExtension(extension);
     if (ret.isError()) {
-        showMessage("Fail to load extension: "+extension);
+        osdMessage("Fail to load extension: "+extension);
         qDebug() << "Fail to load extension: " << extension;
+        return false;
     }
+    return true;
 }
 
 void ScriptHelper::openUrl(const QString & url)
@@ -261,7 +300,7 @@ void ScriptHelper::loadScriptFile(const QString & filename)
     file.close();
     if (!m_scriptEngine->canEvaluate(scripts))
         qDebug() << "Cannot evaluate this script";
-    m_scriptEngine->evaluate(scripts);
+    m_scriptEngine->evaluate(scripts, filename);
     if (m_scriptEngine->hasUncaughtException()) {
         qDebug() << "Exception: " << m_scriptEngine->uncaughtExceptionBacktrace();
     }

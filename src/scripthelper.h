@@ -15,9 +15,11 @@ public:
     ScriptHelper(Window *parent, QScriptEngine *engine);
     ~ScriptHelper();
     Q_PROPERTY(bool accepted READ accepted WRITE setAccepted)
+    Q_PROPERTY(bool qtbindingsAvailable READ qtbindingsAvailable)
     void loadScriptFile(const QString&);
 public slots:
     bool accepted() const;
+    bool qtbindingsAvailable() const;
     void setAccepted(bool);
     int caretX();
     int caretY();
@@ -35,7 +37,8 @@ public slots:
     void buzz();
     void sendString(const QString & string);
     void sendParsedString(const QString & string);
-    void showMessage(const QString & message, int type = 1, int duration = 0);
+    void osdMessage(const QString & message, int type = 1, int duration = 0);
+    void showMessage(const QString & title, const QString & message, int duration = -1);
     void cancelZmodem();
     void setZmodemFileList(const QStringList & fileList);
     QScriptValue getLine(int line);
@@ -49,16 +52,19 @@ public slots:
     QString localPath();
     QString getSelectedText(bool rect = false, bool color = false, const QString & escape = "");
     void openUrl(const QString & url);
-    void loadExtension(const QString & extension);
+    bool loadExtension(const QString & extension);
     QString version();
+    QString findFile(const QString & filename);
 signals:
     void scriptEvent(const QString & type);
+    void eventFinished();
 private:
     bool isScriptLoaded(const QString & filename);
     void addImportedScript(const QString & filename);
     Window * m_window;
     QScriptEngine * m_scriptEngine;
     bool m_accepted;
+    bool m_qtbindingsAvailable;
     QStringList m_scriptList;
     QStringList m_popupActionList;
     QStringList m_urlActionList;

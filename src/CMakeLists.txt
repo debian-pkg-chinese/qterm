@@ -47,7 +47,9 @@ if(QTERM_ENABLE_DBUS)
       add_definitions(-DDBUS_ENABLED)
       include_directories(${QT_QTDBUS_INCLUDE_DIR})
       set(optionalLibs ${optionalLibs} ${QT_QTDBUS_LIBRARY})
-      set(optionalSources ${optionalSources} dbus.cpp)
+      set(optionalSources ${optionalSources}
+      imageconverter.cpp
+      dbus.cpp)
       find_file(KWALLET_XML org.kde.KWallet.xml ${KDE4_DBUS_INTERFACES_DIR} ${DBUS_INTERFACES_INSTALL_DIR})
       if(KWALLET_XML)
          message(STATUS "KWallet found, enable KWallet support")
@@ -60,6 +62,7 @@ endif(QTERM_ENABLE_DBUS)
 if(QTERM_ENABLE_SCRIPT)
    if(QT_QTSCRIPT_FOUND)
       message(STATUS "QtScript module found, enable Script support")
+      find_package(QtScriptQtBindings)
       add_definitions(-DSCRIPT_ENABLED)
       include_directories(${QT_QTSCRIPT_INCLUDE_DIR})
       set(optionalLibs ${optionalLibs} ${QT_QTSCRIPT_LIBRARY})
@@ -111,10 +114,12 @@ set(qterm_SRCS
    ui_shortcutsdialog.h
    ui_toolbardialog.h
    ui_zmodemdialog.h
+   ui_closedialog.h
    aboutdialog.cpp
    addrdialog.cpp
    articledialog.cpp
    imageviewer.cpp
+   imagelistviewer.cpp
    keydialog.cpp
    main.cpp
    msgdialog.cpp
@@ -153,6 +158,8 @@ set(qterm_SRCS
    hostinfo.cpp
    termstring.cpp
    keyboardtranslator.cpp
+   closedialog.cpp
+   uaocodec.cpp
    ${optionalSources})
 set(qterm_UIS
    ui/aboutdialog.ui
@@ -168,6 +175,7 @@ set(qterm_UIS
    ui/soundconf.ui
    ui/sshlogin.ui
    ui/toolbardialog.ui
+   ui/closedialog.ui
    ui/zmodemdialog.ui)
 set(qterm_MISC
    address.cfg
@@ -217,9 +225,7 @@ if(WIN32 AND MINGW)
 endif(WIN32 AND MINGW)
 install(TARGETS qterm DESTINATION bin)
 install(FILES ${qterm_MISC} DESTINATION share/qterm)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/qterm.desktop.in ${CMAKE_CURRENT_BINARY_DIR}/qterm.desktop)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qterm.desktop DESTINATION share/applications)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/qterm.png DESTINATION share/icons)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/qterm.desktop DESTINATION share/applications)
 add_subdirectory(pic)
 add_subdirectory(cursor)
 add_subdirectory(scheme)
