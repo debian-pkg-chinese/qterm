@@ -27,6 +27,7 @@ AUTHOR:        kingson fiasco hooey
 #include "imageviewer.h"
 #include "shortcutsdialog.h"
 #include "toolbardialog.h"
+#include "closedialog.h"
 
 #ifdef DBUS_ENABLED
 #include "dbus.h"
@@ -101,9 +102,7 @@ Frame::Frame()
 
 //create a tabbar in the hbox
     tabBar = new QTabBar(statusBar());
-#if QT_VERSION >= 0x040500
     tabBar->setExpanding(false);
-#endif
     statusBar()->addWidget(tabBar, 90);
     connect(tabBar, SIGNAL(selected(int)), this, SLOT(selectionChanged(int)));
     //tabBar->setShape(QTabBar::TriangularBelow);
@@ -206,8 +205,6 @@ void Frame::iniSetting()
         m_scrollRightAction->setChecked(true);
     }
 
-    m_statusAction->setChecked(Global::instance()->showStatusBar());
-
     m_switchAction->setChecked(Global::instance()->showSwitchBar());
 
     if (Global::instance()->showSwitchBar())
@@ -249,15 +246,53 @@ void Frame::quickLogin()
     }
 }
 
-void Frame::exitQTerm()
+bool Frame::confirmExitQTerm()
 {
-    while (wndmgr->count() > 0) {
-        bool closed = m_MdiArea->activeSubWindow()->close();
-        if (!closed) {
-            return;
+    QList<QVariant> sites;
+    QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
+    QStringList titleList;
+    for (int i = 0; i < int(windows.count()); ++i) {
+        if ((qobject_cast<Window *>(windows.at(i)->widget()))->isConnected()) {
+            titleList << windows.at(i)->windowTitle();
+            sites << qobject_cast<Window *>(windows.at(i)->widget())->index();
+        }
+    }
+    if ((!titleList.isEmpty())&&(Global::instance()->m_pref.bWarn)) {
+        CloseDialog close(this);
+        close.setSiteList(titleList);
+        if (close.exec() == 0) {
+            return false;
+        }
+    }
+    saveAndDisconnect();
+
+    setUseTray(false);
+    qApp->quit();
+    // We should never reach here;
+    return true;
+}
+
+void Frame::saveAndDisconnect()
+{
+    QList<QVariant> sites;
+    QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
+    QStringList titleList;
+    for (int i = 0; i < int(windows.count()); ++i) {
+        if ((qobject_cast<Window *>(windows.at(i)->widget()))->isConnected()) {
+            titleList << windows.at(i)->windowTitle();
+            sites << qobject_cast<Window *>(windows.at(i)->widget())->index();
         }
     }
 
+    while ( wndmgr->count() > 0)
+    {
+        Window * active_window = wndmgr->activeWindow();
+        active_window->disconnect();
+        wndmgr->activeNextPrev(true);
+        wndmgr->removeWindow(active_window);
+    }
+
+    Global::instance()->saveSession(sites);
     saveSetting();
     // clear zmodem and pool if needed
     if (Global::instance()->m_pref.bClearPool) {
@@ -265,9 +300,6 @@ void Frame::exitQTerm()
         Global::instance()->clearDir(Global::instance()->m_pref.strPoolPath);
         Global::instance()->clearDir(Global::instance()->m_pref.strPoolPath + "shadow-cache/");
     }
-
-    setUseTray(false);
-    qApp->quit();
 }
 
 //create a new display window
@@ -276,10 +308,13 @@ void Frame::newWindow(const Param&  param, int index)
     Window * window = new Window(this, param, index, m_MdiArea,
                                  0);
     QString pathLib = Global::instance()->pathLib();
-    m_MdiArea->addSubWindow(window);
+    QMdiSubWindow * w =  m_MdiArea->addSubWindow(window);
     window->setWindowTitle(param.m_strName);
     window->setWindowIcon(QPixmap(pathLib + "pic/tabpad.png"));
     window->setAttribute(Qt::WA_DeleteOnClose);
+    if (m_menuBarAction->isChecked()) {
+        w->setWindowFlags(Qt::FramelessWindowHint);
+    }
 
     QIcon* icon = new QIcon(QPixmap(pathLib + "pic/tabpad.png"));
     QString qtab = window->windowTitle();
@@ -435,29 +470,11 @@ void Frame::closeEvent(QCloseEvent * clse)
             }
         }
     }
-    while (wndmgr->count() > 0) {
-        QWidget * w = m_MdiArea->activeSubWindow();
-        if (w == NULL) {
-            w = m_MdiArea->subWindowList().at(0);
-            if (w == NULL) {
-                qDebug("get mdiarea subwindow failed");
-                break;
-            }
-        }
-        bool closed = w->close();
-        if (!closed) {
-            clse->ignore();
-            return;
-        }
+    if (confirmExitQTerm()) {
+        clse->accept();
+    } else {
+        clse->ignore();
     }
-
-    saveSetting();
-    Global::instance()->cleanup();
-
-    setUseTray(false);
-
-    clse->accept();
-
 }
 
 void Frame::updateLang(QAction * action)
@@ -548,11 +565,6 @@ void Frame::updateCodec(QAction * action)
     }
 }
 
-void Frame::appearance()
-{
-    wndmgr->activeWindow()->appearance();
-
-}
 void Frame::refresh()
 {
     wndmgr->activeWindow()->refresh();
@@ -573,10 +585,20 @@ void Frame::uiFont()
 
 void Frame::hideMenuBar(bool hide)
 {
-    if (hide)
+    if (hide) {
         menuBar()->hide();
-    else
+        QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
+        foreach (QMdiSubWindow * window, windows) {
+            window->setWindowFlags(Qt::FramelessWindowHint);
+        }
+    }
+    else {
+        QList<QMdiSubWindow *> windows = m_MdiArea->subWindowList();
+        foreach (QMdiSubWindow * window, windows) {
+            window->setWindowFlags(Qt::SubWindow);
+        }
         menuBar()->show();
+    }
 }
 
 void Frame::triggerFullScreen(bool isFullScreen)
@@ -745,8 +767,8 @@ void Frame::updateMouse(bool isEnabled)
 
 void Frame::viewImages()
 {
-    Image viewer(Global::instance()->pathPic() + "pic/shadow.png", Global::instance()->m_pref.strPoolPath, this);
-    viewer.exec();
+    Image *pViewer = new Image(Global::instance()->pathPic() + "pic/shadow.png", Global::instance()->m_pref.strPoolPath);
+    pViewer->show();
 }
 
 void Frame::updateBeep(bool isEnabled)
@@ -809,13 +831,13 @@ void Frame::addMainTool()
     mdiTools = addToolBar("Main ToolBar");
     mdiTools->setObjectName("mainToolBar");
 
-    connectButton = new QToolButton(this);
-    connectButton->setObjectName("buttonConnect");
-    connectButton->setIcon(QPixmap(Global::instance()->pathPic() + "pic/connect.png"));
-
-    QAction * connectAction = mdiTools->addWidget(connectButton);
+    QAction * connectAction = new QAction(QPixmap(Global::instance()->pathPic() + "pic/connect.png"), tr("&Connect"), this);
     connectAction->setObjectName("actionConnectButton");
+    mdiTools->addAction(connectAction);
     connectMenu = new QMenu(this);
+
+    QToolButton * connectButton = qobject_cast<QToolButton *> (mdiTools->widgetForAction(connectAction));
+    connectButton->setObjectName("buttonConnect");
 
     connect(connectMenu, SIGNAL(aboutToShow()), this, SLOT(popupConnectMenu()));
     connectButton->setMenu(connectMenu);
@@ -872,7 +894,7 @@ void Frame::initShortcuts()
 
 void Frame::initActions()
 {
-    QString pathLib = Global::instance()->pathLib();
+    QString pathLib = Global::instance()->pathPic();
 
     m_connectAction = new QAction(QPixmap(pathLib + "pic/connect.png"), tr("&Connect"), this);
     m_connectAction->setObjectName("actionConnect");
@@ -936,8 +958,6 @@ void Frame::initActions()
     codecGroup->addAction(m_S2TAction);
     codecGroup->addAction(m_T2SAction);
 
-    m_appearanceAction= new QAction(QPixmap(pathLib + "pic/appearance.png"), tr("&Appearance..."), this);
-    m_appearanceAction->setObjectName("actionAppearance");
     m_refreshAction = new QAction(QPixmap(pathLib + "pic/refresh.png"), tr("&Refresh"), this);
     m_refreshAction->setObjectName("actionRefresh");
 
@@ -985,9 +1005,6 @@ void Frame::initActions()
     scrollGroup->addAction(m_scrollLeftAction);
     scrollGroup->addAction(m_scrollRightAction);
 
-    m_statusAction = new QAction(tr("Status &Bar"), this);
-    m_statusAction->setObjectName("actionStatus");
-    m_statusAction->setCheckable(true);
     m_switchAction = new QAction(tr("S&witch Bar"), this);
     m_switchAction->setObjectName("actionSwitch");
     m_switchAction->setCheckable(true);
@@ -1051,7 +1068,7 @@ void Frame::initActions()
     connect(m_addressAction, SIGNAL(triggered()), this, SLOT(addressBook()));
     connect(m_quickConnectAction, SIGNAL(triggered()), this, SLOT(quickLogin()));
     connect(m_printAction, SIGNAL(triggered()), this, SLOT(printScreen()));
-    connect(m_exitAction, SIGNAL(triggered()), this, SLOT(exitQTerm()));
+    connect(m_exitAction, SIGNAL(triggered()), this, SLOT(confirmExitQTerm()));
 
     connect(m_copyAction, SIGNAL(triggered()), this, SLOT(copy()));
     connect(m_pasteAction, SIGNAL(triggered()), this, SLOT(paste()));
@@ -1063,7 +1080,6 @@ void Frame::initActions()
     connect(escapeGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateESC(QAction*)));
     connect(codecGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateCodec(QAction*)));
 
-    connect(m_appearanceAction, SIGNAL(triggered()), this, SLOT(appearance()));
     connect(m_refreshAction, SIGNAL(triggered()), this, SLOT(refresh()));
 
     connect(langGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateLang(QAction*)));
@@ -1075,7 +1091,6 @@ void Frame::initActions()
 
     connect(scrollGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateScroll(QAction*)));
 
-    connect(m_statusAction, SIGNAL(toggled(bool)), this, SLOT(updateStatusBar(bool)));
     connect(m_switchAction, SIGNAL(toggled(bool)), this, SLOT(updateSwitchBar(bool)));
 
     connect(m_currentSessionAction, SIGNAL(triggered()), this, SLOT(setting()));
@@ -1107,7 +1122,7 @@ void Frame::addMainMenu()
 {
     mainMenu = menuBar();
 
-    QMenu * file = mainMenu->addMenu(tr("&File"));
+    QMenu * file = mainMenu->addMenu(tr("File"));
     file->addAction(m_connectAction);
     file->addAction(m_disconnectAction);
 
@@ -1120,7 +1135,7 @@ void Frame::addMainMenu()
     file->addAction(m_exitAction);
 
     //Edit Menu
-    QMenu * edit = new QMenu(tr("&Edit"), this);
+    QMenu * edit = new QMenu(tr("Edit"), this);
     mainMenu->addMenu(edit);
 
     edit->addAction(m_copyAction);
@@ -1145,10 +1160,9 @@ void Frame::addMainMenu()
     edit->addMenu(codecMenu);
 
     //View menu
-    QMenu * view = new QMenu(tr("&View"), this);
+    QMenu * view = new QMenu(tr("View"), this);
     mainMenu->addMenu(view);
 
-    view->addAction(m_appearanceAction);
     view->addAction(m_refreshAction);
     view->addSeparator();
 
@@ -1171,7 +1185,6 @@ void Frame::addMainMenu()
     scrollMenu->addAction(m_scrollLeftAction);
     scrollMenu->addAction(m_scrollRightAction);
     view->addMenu(scrollMenu);
-    view->addAction(m_statusAction);
     view->addAction(m_switchAction);
     view->addSeparator();
     view->addAction(m_menuBarAction);
@@ -1179,7 +1192,7 @@ void Frame::addMainMenu()
 
 
     // Option Menu
-    QMenu * option = new QMenu(tr("&Option"), this);
+    QMenu * option = new QMenu(tr("Option"), this);
     mainMenu->addMenu(option);
 
     option->addAction(m_currentSessionAction);
@@ -1191,7 +1204,7 @@ void Frame::addMainMenu()
     option->addAction(m_toolbarsAction);
 
     // Special
-    QMenu * spec = new QMenu(tr("&Special"), this);
+    QMenu * spec = new QMenu(tr("Special"), this);
     mainMenu->addMenu(spec);
     spec->addAction(m_copyArticleAction);
     spec->addAction(m_antiIdleAction);
@@ -1203,7 +1216,7 @@ void Frame::addMainMenu()
 
 
     //Script
-    QMenu * script = new QMenu(tr("Scrip&t"), this);
+    QMenu * script = new QMenu(tr("Script"), this);
     mainMenu->addMenu(script);
     script->addAction(m_scriptRunAction);
     script->addAction(m_scriptStopAction);
@@ -1212,7 +1225,7 @@ void Frame::addMainMenu()
     script->addAction(m_scriptReloadAction);
 
     //Window menu
-    windowsMenu = new QMenu(tr("&Windows"), this);
+    windowsMenu = new QMenu(tr("Windows"), this);
     connect(windowsMenu, SIGNAL(aboutToShow()),
             this, SLOT(windowsMenuAboutToShow()));
 
@@ -1220,7 +1233,7 @@ void Frame::addMainMenu()
     mainMenu->addSeparator();
 
     //Help menu
-    QMenu * help = new QMenu(tr("&Help"), this);
+    QMenu * help = new QMenu(tr("Help"), this);
     mainMenu->addMenu(help);
     help->addAction(m_aboutAction);
     help->addAction(m_homepageAction);
@@ -1236,8 +1249,6 @@ QMenu * Frame::genPopupMenu(QWidget * owner)
     popupMenu->addAction(m_copyAction);
     popupMenu->addAction(m_pasteAction);
     popupMenu->addAction(m_copyArticleAction);
-    popupMenu->addSeparator();
-    popupMenu->addAction(m_appearanceAction);
     popupMenu->addSeparator();
     popupMenu->addAction(m_currentSessionAction);
     return popupMenu;
@@ -1279,7 +1290,6 @@ void Frame::enableMenuToolBar(bool enable)
     m_autoCopyAction->setEnabled(enable);
     m_wwrapAction->setEnabled(enable);
 
-    m_appearanceAction->setEnabled(enable);
     m_refreshAction->setEnabled(enable);
 
     m_currentSessionAction->setEnabled(enable);
@@ -1387,7 +1397,6 @@ void Frame::setUseTray(bool use)
     tray->setContextMenu(trayMenu);
     connect(tray, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
             this, SLOT(trayActivated(QSystemTrayIcon::ActivationReason)));
-//  connect(tray, SIGNAL(closed()), this, SLOT(exitQTerm()));
 
     tray->show();
 }
@@ -1404,7 +1413,7 @@ void Frame::buildTrayMenu()
         trayMenu->addAction(tr("&Hide"), this, SLOT(trayHide()));
     trayMenu->addSeparator();
     trayMenu->addAction(tr("&About"), this, SLOT(aboutQTerm()));
-    trayMenu->addAction(tr("&Exit"), this, SLOT(exitQTerm()));
+    trayMenu->addAction(tr("&Exit"), this, SLOT(confirmExitQTerm()));
 }
 
 void Frame::trayActivated(QSystemTrayIcon::ActivationReason reason)
@@ -1577,6 +1586,48 @@ void Frame::configToolbars()
 void Frame::slotShowQTerm()
 {
     popupFocusIn(NULL);
+}
+
+void Frame::keyPressEvent(QKeyEvent * e)
+{
+    if (wndmgr->count() == 0 && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
+        loadSession();
+        e->accept();
+    } else {
+        e->ignore();
+    }
+}
+
+void Frame::mouseReleaseEvent(QMouseEvent * e)
+{
+    if (wndmgr->count() == 0 && (e->button() == Qt::LeftButton)) {
+        loadSession();
+        e->accept();
+    } else {
+        e->ignore();
+    }
+
+}
+void Frame::loadSession()
+{
+    QList<QVariant> sites = Global::instance()->loadSession();
+    if (sites.empty()) {
+        connectMenuActivated(0);
+    } else {
+        for (int i = 0; i < sites.size(); i++) {
+            int index = sites.at(i).toInt();
+            connectMenuActivated(index);
+        }
+    }
+}
+
+bool Frame::showMessage(const QString & title, const QString & message, int millisecondsTimeoutHint)
+{
+    if (tray == 0 || !QSystemTrayIcon::isSystemTrayAvailable() || !QSystemTrayIcon::supportsMessages()) {
+        return false;
+    }
+    tray->showMessage(title, message, QSystemTrayIcon::Information, millisecondsTimeoutHint);
+    return true;
 }
 
 }

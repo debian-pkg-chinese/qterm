@@ -87,7 +87,7 @@ QString BBS::getMessage()
     message = (m_pBuffer->screen(0)->getText().simplified());
     line = m_pBuffer->screen(i);
     while (isUnicolor(line)) {
-        message += "\n" + (line->getText());
+        message += "\n" + (line->getText().simplified());
         i++;
         line = m_pBuffer->screen(i);
     }
@@ -424,7 +424,7 @@ bool BBS::checkUrl(QRect & rcUrl, QRect & rcOld)
             if (pt > url.first && pt < url.second) {
                 //qDebug() << "get text: " << getText(url.first, url.second);
                 m_strUrl = getText(url.first, url.second);
-                QRegExp urlRe("^(mailto:|(https?|mms|rstp|ftp|gopher|telnet|ed2k|file)://)");
+                QRegExp urlRe("(mailto:|(https?|mms|rstp|ftp|gopher|telnet|ed2k|file)://)");
                 QRegExp emailRe("^[A-Z0-9._%-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}");
                 if (urlRe.indexIn(m_strUrl)==-1) {
                     if (emailRe.indexIn(m_strUrl)==-1) {
@@ -542,6 +542,9 @@ void BBS::updateUrlList()
                     }
                     multiline = true;
                 }
+                if (index2 == -1) {
+                    index2 = m_pBuffer->screen(i)->getText().length() - 1;
+                }
                 int urlEnd = i*m_pBuffer->columns() + m_pBuffer->screen(i)->beginIndex(index2);
                 if (verifyUrl(urlBegin, urlEnd))
                     m_urlPosList.append(qMakePair(urlBegin, urlEnd));
@@ -565,6 +568,10 @@ bool BBS::verifyUrl(int urlBegin, int urlEnd)
     int i, index, begin, end, dot, url, host, ata;
     int ip_begin = 0;
     int ip_end = 0;
+
+    if (urlEnd < urlBegin) {
+        return false;
+    }
 
     QString strText = getText(urlBegin, urlEnd);
 
@@ -658,7 +665,7 @@ int BBS::checkUrlBegin( const QString & lineText, int index)
 {
     int i = 0;
     QString urlText = lineText;
-    for (i = index; i < urlText.length() && isIllChar(urlText.at(i)); i++);
+    for (i = index; i < urlText.length() && isIllChar(urlText.at(i)); i++) ;
     if (i < urlText.length()) {
         return i;
     }
@@ -672,7 +679,7 @@ int BBS::checkUrlEnd( const QString & lineText, int index)
     if (urlText.isEmpty()) {
         return 0;
     }
-    for (i = index; i< urlText.length() && !isIllChar(urlText.at(i)); i++);
+    for (i = index; i< urlText.length() && !isIllChar(urlText.at(i)); i++) ;
     if (i < urlText.length()) {
         return i;
     }

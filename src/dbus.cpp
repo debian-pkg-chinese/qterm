@@ -11,15 +11,16 @@
 //
 
 #include "dbus.h"
+#include "imageconverter.h"
 #include <QtDBus>
 #include <QtDebug>
 
 namespace QTerm
 {
 DBus * DBus::m_instance = 0;
-static const QString dbusServiceName = "org.kde.VisualNotifications";
-static const QString dbusInterfaceName = "org.kde.VisualNotifications";
-static const QString dbusPath = "/VisualNotifications";
+static const QString dbusServiceName = "org.freedesktop.Notifications";
+static const QString dbusInterfaceName = "org.freedesktop.Notifications";
+static const QString dbusPath = "/org/freedesktop/Notifications";
 
 DBus * DBus::instance()
 {
@@ -37,7 +38,7 @@ DBus * DBus::instance()
 }
 
 DBus::DBus()
-    :m_notificationAvailable(false),m_idList()
+    :m_notificationAvailable(false),m_idList(),m_serverCapabilities()
 {
     m_idList.clear();
     QDBusConnectionInterface* interface = QDBusConnection::sessionBus().interface();
@@ -73,6 +74,14 @@ void DBus::createConnection()
     if (!connected) {
         qDebug() << "warning: failed to connect to NotificationClosed dbus signal";
     }
+    checkCapabilities();
+}
+
+void DBus::checkCapabilities()
+{
+    QDBusMessage message = QDBusMessage::createMethodCall( dbusServiceName, dbusPath, dbusInterfaceName, "GetCapabilities" );
+    QDBusReply<QStringList> replyMsg = QDBusConnection::sessionBus().call(message);
+    m_serverCapabilities = replyMsg.value();
 }
 
 void DBus::slotServiceOwnerChanged( const QString & serviceName, const QString & oldOwner, const QString & newOwner )
@@ -96,27 +105,32 @@ void DBus::slotServiceOwnerChanged( const QString & serviceName, const QString &
     }
 }
 
-bool DBus::sendNotification(const QString & summary, const QString & body, QList<DBus::Action> actions)
+bool DBus::sendNotification(const QString & summary, const QString & body, const QImage & image, QList<DBus::Action> actions)
 {
     QDBusMessage message = QDBusMessage::createMethodCall( dbusServiceName, dbusPath, dbusInterfaceName, "Notify" );
     uint id = 0;
     QList<QVariant> args;
     args.append("QTerm");
     args.append(id); // If I send 0 directly, this will be an int32 instead of uin32, resulting an unknown method error.
-    args.append(QString());
-    args.append(QString());
-    args.append(summary);
-    args.append(body);
+//    args.append(QString());
+    args.append("qterm"); // Icon name
+    args.append(summary); // Title
+    args.append(body); // Text
     QStringList actionList;
-    foreach (DBus::Action action, actions) {
-        if (action==DBus::Show_QTerm) {
-            actionList.append(QString::number(DBus::Show_QTerm));
-            actionList.append("Show QTerm");
+    if (m_serverCapabilities.contains("actions")) {
+        foreach (DBus::Action action, actions) {
+            if (action==DBus::Show_QTerm) {
+                actionList.append(QString::number(DBus::Show_QTerm));
+                actionList.append("Show QTerm");
+            }
         }
     }
     args.append(actionList);
-    args.append(QVariantMap());
-    args.append(6*1000);
+    QVariantMap map;
+    if (!image.isNull())
+        map["image_data"] = ImageConverter::variantForImage(image);
+    args.append(map);
+    args.append(-1);//-1 means: notification server decides
     message.setArguments(args);
     QDBusMessage replyMsg = QDBusConnection::sessionBus().call(message);
     if(replyMsg.type() == QDBusMessage::ReplyMessage) {

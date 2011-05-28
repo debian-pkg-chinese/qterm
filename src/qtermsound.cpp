@@ -7,7 +7,7 @@
 #ifdef OLD_PHONON
 #include <phonon>
 #else
-#include <Phonon/MediaObject>
+#include <phonon/MediaObject>
 #endif
 #endif // PHONON_ENABLED
 
@@ -23,7 +23,7 @@ void
 PhononSound::play()
 {
     if (QFile::exists(_soundfile)) {
-        Phonon::MediaObject * player = Phonon::createPlayer(Phonon::MusicCategory, Phonon::MediaSource(_soundfile));
+        Phonon::MediaObject * player = Phonon::createPlayer(Phonon::NotificationCategory, Phonon::MediaSource(_soundfile));
         player->play();
     }
 }

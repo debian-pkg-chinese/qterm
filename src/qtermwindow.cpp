@@ -36,6 +36,7 @@ AUTHOR:        kingson fiasco
 #include "progressBar.h"
 #include "qtermglobal.h"
 #include "hostinfo.h"
+#include "keyboardtranslator.h"
 
 #ifdef SCRIPT_ENABLED
 #include "scripthelper.h"
@@ -247,6 +248,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_param = param;
     m_nAddrIndex = addr;
     m_hostInfo = NULL;
+    m_translator = NULL;
     QString pathLib = Global::instance()->pathLib();
     setMouseTracking(true);
 
@@ -259,6 +261,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 #endif // SCRIPT_ENABLED
 //init the textline list
 
+    m_codec = QTextCodec::codecForName(param.m_BBSCode.toLatin1());
     m_pBuffer = new Buffer(m_param.m_nRow, m_param.m_nCol, m_param.m_nScrollLines);
     if (param.m_nProtocolType == 0)
         m_pTelnet = new Telnet(m_param.m_strTerm,
@@ -277,9 +280,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_pBuffer, SIGNAL(windowSizeChanged(int, int)),
             m_pTelnet, SLOT(windowSizeChanged(int, int)));
     m_pZmDialog = new zmodemDialog(this);
-    m_pZmodem = new Zmodem(m_pTelnet, param.m_nProtocolType);
+    m_pZmodem = new Zmodem(this, m_pTelnet, m_codec, param.m_nProtocolType);
 
-    m_codec = QTextCodec::codecForName(param.m_BBSCode.toLatin1());
     if (m_codec == 0) {
         qDebug("Fallback to GBK codec");
         m_codec = QTextCodec::codecForName("GBK");
@@ -290,7 +292,6 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_pScreen = new Screen(this, m_pBuffer, &m_param, m_pBBS);
 
     m_pIPLocation = new IPLocation(pathLib);
-    m_pMessage = new PageViewMessage(this);
     m_bCheckIP = m_pIPLocation->haveFile();
     m_pSound = NULL;
 
@@ -307,13 +308,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 
     m_popWin = new popWidget(this, m_pFrame);
 
-    m_pMessage->display(tr("Not Connected"));
-    statusBar()->setSizeGripEnabled(false);
-
-    if (Global::instance()->showStatusBar())
-        statusBar()->show();
-    else
-        statusBar()->hide();
+    m_pScreen->osd()->display(tr("Not Connected"));
 
     // disable the dock menu
 //  setDockMenuEnabled(false);
@@ -337,8 +332,6 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
             this, SLOT(readReady(int)));
     connect(m_pTelnet, SIGNAL(TelnetState(int)),
             this, SLOT(TelnetState(int)));
-    connect(m_pFrame, SIGNAL(statusBarChanged(bool)),
-            this, SLOT(showStatusBar(bool)));
 // timers
     m_idleTimer = new QTimer;
     connect(m_idleTimer, SIGNAL(timeout()), this, SLOT(idleProcess()));
@@ -348,8 +341,6 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_tabTimer, SIGNAL(timeout()), this, SLOT(blinkTab()));
     m_reconnectTimer = new QTimer;
     connect(m_reconnectTimer, SIGNAL(timeout()), this, SLOT(reconnect()));
-    m_ipTimer = new QTimer;
-    connect(m_ipTimer, SIGNAL(timeout()), this, SLOT(showIP()));
     m_updateTimer = new QTimer;
     m_updateTimer->setSingleShot(true);
     connect(m_updateTimer, SIGNAL(timeout()), this, SLOT(updateWindow()));
@@ -375,8 +366,6 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_bConnected = false;
     m_bIdling = false;
 
-    m_bSetChanged = false;
-
     m_bMouseX11 = false;
     m_bMouseClicked = false;
 #ifdef SSH_ENABLED
@@ -401,6 +390,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 
     initScript();
 
+    loadKeyboardTranslator(param.m_strKeyboardProfile);
+
     connectHost();
 }
 
@@ -424,7 +415,6 @@ Window::~Window()
     delete m_pScreen;
     delete m_reconnectTimer;
     delete m_pIPLocation;
-    delete m_pMessage;
     delete m_pSound;
     delete m_hostInfo;
 #ifdef SCRIPTTOOLS_ENABLED
@@ -437,21 +427,17 @@ Window::~Window()
 void Window::closeEvent(QCloseEvent * clse)
 {
     if (m_bConnected && Global::instance()->m_pref.bWarn) {
-        QMessageBox mb("QTerm",
+        QMessageBox::StandardButton ret;
+        ret = QMessageBox::warning(this, "QTerm",
                        tr("Connected,Do you still want to exit?"),
-                       QMessageBox::Warning,
-                       QMessageBox::Yes | QMessageBox::Default,
-                       QMessageBox::No  | QMessageBox::Escape ,
-                       0, this);
-        if (mb.exec() == QMessageBox::Yes) {
+                       QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (ret == QMessageBox::Yes) {
             m_pTelnet->close();
-            saveSetting();
             m_pFrame->wndmgr->removeWindow(this);
             clse->accept();
         } else
             clse->ignore();
     } else {
-        saveSetting();
         m_pFrame->wndmgr->removeWindow(this);
         clse->accept();
     }
@@ -564,9 +550,11 @@ void Window::mousePressEvent(QMouseEvent * me)
     // Left Button for selecting
     if (me->button()&Qt::LeftButton && !(me->modifiers())) {
         // clear the selected before
-        m_pBuffer->clearSelect();
-        m_pScreen->m_ePaintState = Screen::NewData;
-        m_pScreen->update();
+        if (m_ptSelStart != m_ptSelEnd) {
+            m_pBuffer->clearSelect();
+            m_pScreen->m_ePaintState = Screen::NewData;
+            m_pScreen->update();
+        }
 
         // set the selecting flag
         m_bSelecting = true;
@@ -677,16 +665,13 @@ void Window::mouseMoveEvent(QMouseEvent * me)
         QRect rcUrl_IP = m_rcUrl;
         bool bUrl = false;
         if (Global::instance()->m_pref.bUrl) {
-            if (m_pBBS->isIP(rcUrl_IP, rcOld_IP) && m_bCheckIP) {
-                if (rcUrl_IP != rcOld_IP) {
-                    if (!m_ipTimer->isActive()) {
-                        m_ipTimer->setSingleShot(false);
-                        m_ipTimer->start(100);
-                    }
+            if (m_pBBS->isIP(rcUrl_IP, rcOld_IP)) {
+                if (rcUrl_IP != rcOld_IP && !m_pScreen->osd()->isVisible()) {
+                    showIP();
                 }
             } else {
-                if (m_ipTimer->isActive())
-                    m_ipTimer->stop();
+                if (m_pScreen->osd()->isVisible() && m_pScreen->osd()->type() == PageViewMessage::IP)
+                    m_pScreen->osd()->hide();
             }
 
             if (m_pBBS->isUrl(m_rcUrl, rcOld)) {
@@ -748,7 +733,7 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
     if (!m_pBBS->getUrl().isEmpty()) {
         bool ok;
         QString caption = tr("Open URL");
-        QString hint = "url";
+        QString hint = tr("URL:");
         QString strUrl = QInputDialog::getText(this, caption, hint,
                                                QLineEdit::Normal, QString(m_pBBS->getUrl()), &ok);
         if (ok) {
@@ -867,57 +852,50 @@ void Window::keyPressEvent(QKeyEvent * e)
     if (m_replyTimer->isActive())
         m_replyTimer->stop();
 
-    if (e->modifiers() & Qt::MetaModifier) {
-        if (e->key() >= Qt::Key_A && e->key() <= Qt::Key_Z) {
-            char ch = e->key() & 0x1f;
-            m_pTelnet->write(&ch, 1);
+    Qt::KeyboardModifiers modifiers = e->modifiers();
+    KeyboardTranslator::States states = KeyboardTranslator::AnsiState;
+
+    if ( m_translator )
+    {
+    KeyboardTranslator::Entry entry = m_translator->findEntry(
+                                                e->key() ,
+                                                modifiers,
+                                                states );
+
+        // send result to terminal
+        QByteArray textToSend;
+
+        // special handling for the Alt (aka. Meta) modifier.  pressing
+        // Alt+[Character] results in Esc+[Character] being sent
+        // (unless there is an entry defined for this particular combination
+        //  in the keyboard modifier)
+        bool wantsAltModifier = entry.modifiers() & entry.modifierMask() & Qt::AltModifier;
+        bool wantsAnyModifier = entry.state() &
+                                entry.stateMask() & KeyboardTranslator::AnyModifierState;
+
+        if ( modifiers & Qt::AltModifier && !(wantsAltModifier || wantsAnyModifier)
+             && !e->text().isEmpty() )
+        {
+            textToSend.prepend("\033");
         }
-        return;
+
+        if ( entry.command() != KeyboardTranslator::NoCommand )
+        {
+            if (entry.command() & KeyboardTranslator::EraseCommand)
+                textToSend += "\x1b[3~";
+
+            // TODO command handling
+        }
+        else if ( !entry.text().isEmpty() )
+        {
+            textToSend += unicode2bbs(entry.text(true,modifiers));
+        }
+        else
+            textToSend += unicode2bbs(e->text());
+
+        m_pTelnet->write(textToSend, textToSend.length());
     }
 
-    // TODO get the input messages
-// if( m_bMessage && e->key()==Key_Return && m_pBuffer->caret().y()==1 )
-// {
-//  m_strMessage += m_pBuffer->screen(1)->getText()+"\n";
-// }
-
-    switch (e->key()) {
-    case Qt::Key_Home:
-        m_pTelnet->write(direction[0], 4);
-        return;
-    case Qt::Key_End:
-        m_pTelnet->write(direction[1], 4);
-        return;
-    case Qt::Key_PageUp:
-        m_pTelnet->write(direction[2], 4);
-        return;
-    case Qt::Key_PageDown:
-        m_pTelnet->write(direction[3], 4);
-        return;
-    case Qt::Key_Up:
-        m_pTelnet->write(direction[4], 3);
-        return;
-    case Qt::Key_Down:
-        m_pTelnet->write(direction[5], 3);
-        return;
-    case Qt::Key_Left:
-        m_pTelnet->write(direction[6], 3);
-        return;
-    case Qt::Key_Right:
-        m_pTelnet->write(direction[7], 3);
-        return;
-    case Qt::Key_Delete: // stupid
-        m_pTelnet->write("\x1b[3~", 4);
-        return;
-    default:
-        break;
-    }
-
-
-    if (e->text().length()) {
-        QByteArray cstrTmp = unicode2bbs(e->text());
-        m_pTelnet->write(cstrTmp, cstrTmp.length());
-    }
 }
 
 //connect slot
@@ -1098,87 +1076,70 @@ void Window::TelnetState(int state)
 #endif
     switch (state) {
     case TSRESOLVING:
-        //statusBar()->message( tr("resolving host name") );
-        m_pMessage->display(tr("resolving host name"));
+        m_pScreen->osd()->display(tr("resolving host name"));
         break;
     case TSHOSTFOUND:
-        //statusBar()->message( tr("host found") );
-        m_pMessage->display(tr("host found"));
+        m_pScreen->osd()->display(tr("host found"));
         break;
     case TSHOSTNOTFOUND:
-        //statusBar()->message( tr("host not found") );
-        m_pMessage->display(tr("host not found"));
+        m_pScreen->osd()->display(tr("host not found"));
         connectionClosed();
         break;
     case TSCONNECTING:
-        //statusBar()->message( tr("connecting...") );
-        m_pMessage->display(tr("connecting..."));
+        m_pScreen->osd()->display(tr("connecting..."));
         break;
     case TSHOSTCONNECTED:
-        //statusBar()->message( tr("connected") );
-        m_pMessage->display(tr("connected"));
+        m_pScreen->osd()->display(tr("connected"));
         m_bConnected = true;
         m_pFrame->updateMenuToolBar();
         if (m_param.m_bAutoLogin)
             m_bDoingLogin = true;
         break;
     case TSPROXYCONNECTED:
-        //statusBar()->message( tr("connected to proxy" ) );
-        m_pMessage->display(tr("connected to proxy"));
+        m_pScreen->osd()->display(tr("connected to proxy"));
         break;
     case TSPROXYAUTH:
-        //statusBar()->message( tr("proxy authentation") );
-        m_pMessage->display(tr("proxy authentation"));
+        m_pScreen->osd()->display(tr("proxy authentation"));
         break;
     case TSPROXYFAIL:
-        //statusBar()->message( tr("proxy failed") );
-        m_pMessage->display(tr("proxy failed"));
+        m_pScreen->osd()->display(tr("proxy failed"));
         disconnect();
         break;
     case TSREFUSED:
-        //statusBar()->message( tr("connection refused") );
-        m_pMessage->display(tr("connection refused"));
+        m_pScreen->osd()->display(tr("connection refused"));
         connectionClosed();
         break;
     case TSREADERROR:
-        //statusBar()->message( tr("error when reading from server") );
-        m_pMessage->display(tr("error when reading from server"), PageViewMessage::Error);
+        m_pScreen->osd()->display(tr("error when reading from server"), PageViewMessage::Error);
         disconnect();
         break;
     case TSCLOSED:
-        //statusBar()->message( tr("connection closed") );
-        m_pMessage->display(tr("connection closed"));
+        m_pScreen->osd()->display(tr("connection closed"));
         connectionClosed();
         if (m_param.m_bReconnect && m_bReconnect)
             reconnectProcess();
         break;
     case TSCLOSEFINISH:
-        //statusBar()->message( tr("connection close finished") );
-        m_pMessage->display(tr("connection close finished"));
+        m_pScreen->osd()->display(tr("connection close finished"));
         //connectionClosed();
         break;
     case TSCONNECTVIAPROXY:
-        //statusBar()->message( tr("connect to host via proxy") );
-        m_pMessage->display(tr("connect to host via proxy"));
+        m_pScreen->osd()->display(tr("connect to host via proxy"));
         break;
     case TSEGETHOSTBYNAME:
-        //statusBar()->message( tr("error in gethostbyname") );
-        m_pMessage->display(tr("error in gethostbyname"), PageViewMessage::Error);
+        m_pScreen->osd()->display(tr("error in gethostbyname"), PageViewMessage::Error);
         connectionClosed();
         break;
     case TSEINIWINSOCK:
-        //statusBar()->message( tr("error in startup winsock") );
-        m_pMessage->display(tr("error in startup winsock"), PageViewMessage::Error);
+        m_pScreen->osd()->display(tr("error in startup winsock"), PageViewMessage::Error);
         connectionClosed();
         break;
     case TSERROR:
-        //statusBar()->message( tr("error in connection") );
-        m_pMessage->display(tr("error in connection"), PageViewMessage::Error);
+        m_pScreen->osd()->display(tr("error in connection"), PageViewMessage::Error);
         disconnect();
         break;
     case TSPROXYERROR:
-        //statusBar()->message( tr("eoor in proxy") );
-        m_pMessage->display(tr("error in proxy"), PageViewMessage::Error);
+        m_pScreen->osd()->display(tr("error in proxy"), PageViewMessage::Error);
         disconnect();
         break;
     case TSWRITED:
@@ -1240,9 +1201,9 @@ void Window::pasteHelper(bool clip)
 
     if (m_bWordWrap) {
         // insert '\n' as needed
-        for (uint i = 0; i < strText.length(); i++) {
-            uint j = i;
-            uint k = 0, l = 0;
+        for (int i = 0; i < strText.length(); i++) {
+            int j = i;
+            int k = 0, l = 0;
             while (strText.at(j) != QChar('\n') && j < strText.length()) {
                 if (Global::instance()->m_pref.nWordWrap - (l - k) >= 0 &&
                         Global::instance()->m_pref.nWordWrap - (l - k) < 2) {
@@ -1272,17 +1233,37 @@ void Window::copyArticle()
     if (!m_bConnected)
         return;
 
+#ifdef SCRIPT_ENABLED
+    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+        m_scriptHelper->setAccepted(false);
+        QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onCopyArticle");
+        if (func.isFunction()) {
+            QScriptValue text = func.call();
+            if (m_scriptHelper->accepted()) {
+                showArticle(text.toString());
+                return;
+            }
+        } else {
+            qDebug("onCopyArticle is not a function");
+        }
+        if (m_scriptEngine->hasUncaughtException()) {
+            QScriptValue exception = m_scriptEngine->uncaughtException();
+            qDebug() << "Exception: " << exception.toString();
+        }
+    }
+#endif
+
     m_pDAThread = new DAThread(this);
     connect(m_pDAThread, SIGNAL(done(int)), this, SLOT(jobDone(int)));
     m_pDAThread->start();
 
 }
 
-void Window::appearance()
+void Window::setting()
 {
     addrDialog set(this, true);
-    int fontSize = m_param.m_nFontSize;
-    QString schemeFile = m_param.m_strSchemeFile;
+
+    Param backup = m_param;
 
     set.param = m_param;
     set.updateData(false);
@@ -1291,13 +1272,14 @@ void Window::appearance()
     connect(set.ui.generalFontComboBox, SIGNAL(currentFontChanged(const QFont &)), m_pScreen, SLOT(generalFontChanged(const QFont &)));
     connect(set.ui.fontSizeSpinBox, SIGNAL(valueChanged(int)), m_pScreen, SLOT(fontSizeChanged(int)));
     connect(set.ui.schemeComboBox, SIGNAL(currentIndexChanged(int)), m_pScreen, SLOT(schemeChanged(int)));
+    set.ui.asciiFontComboBox->setCurrentFont(m_pScreen->asciiFont());
+    set.ui.generalFontComboBox->setCurrentFont(m_pScreen->generalFont());
 
     if (set.exec() == 1) {
         m_param = set.param;
-        m_bSetChanged = true;
+        Global::instance()->saveAddress(m_nAddrIndex, m_param);
     } else {
-        m_param.m_nFontSize = fontSize;
-        m_param.m_strSchemeFile = schemeFile;
+        m_param = backup;
     }
     m_pScreen->setScheme();
     m_pScreen->initFontMetrics();
@@ -1319,10 +1301,14 @@ void Window::reconnect()
 
 void Window::showIP()
 {
+    if (!m_bCheckIP) {
+        m_pScreen->osd()->display(tr("IP database not found"), PageViewMessage::Warning, 0, PageViewMessage::IP);
+        return;
+    }
     QString country, city;
     QString url = m_pBBS->getIP();
     if (m_pIPLocation->getLocation(url, country, city)) {
-        m_pMessage->display(m_codec->toUnicode((country + city).toLatin1()), PageViewMessage::Info, 100);
+        m_pScreen->osd()->display((country + city), PageViewMessage::Info, 0, PageViewMessage::IP);
     }
 }
 
@@ -1331,14 +1317,6 @@ void Window::refresh()
     //m_pScreen->repaint(true);
     m_pScreen->m_ePaintState = Screen::Show;
     m_pScreen->update();
-}
-
-void Window::showStatusBar(bool bShow)
-{
-    if (bShow)
-        statusBar()->show();
-    else
-        statusBar()->hide();
 }
 
 void Window::debugConsole()
@@ -1391,23 +1369,6 @@ void Window::viewMessages()
 
 }
 
-void Window::setting()
-{
-    addrDialog set(this, true);
-
-    set.param = m_param;
-    set.updateData(false);
-
-    if (set.exec() == 1) {
-        m_param = set.param;
-        m_bSetChanged = true;
-        m_pScreen->setScheme();
-        m_pScreen->initFontMetrics();
-        QResizeEvent* re = new QResizeEvent(m_pScreen->size(), m_pScreen->size());
-        QApplication::postEvent(m_pScreen, re);
-    }
-}
-
 void Window::antiIdle(bool isEnabled)
 {
     m_bAntiIdle = isEnabled;
@@ -1437,8 +1398,7 @@ void Window::connectionClosed()
     if (m_idleTimer->isActive())
         m_idleTimer->stop();
 
-    //statusBar()->message( tr("connection closed") );
-    m_pMessage->display(tr("connection closed"));
+    m_pScreen->osd()->display(tr("connection closed"));
 
     m_pFrame->updateMenuToolBar();
 
@@ -1507,23 +1467,24 @@ void Window::reconnectProcess()
 void Window::jobDone(int e)
 {
     if (e == DAE_FINISH) {
-        articleDialog article(this);
-        const char * size = Global::instance()->fileCfg()->getItemValue("global", "articledialog").toString().toLatin1().data();
-        if (size != NULL) {
-            int x, y, cx, cy;
-            sscanf(size, "%d %d %d %d", &x, &y, &cx, &cy);
-            article.resize(QSize(cx, cy));
-            article.move(QPoint(x, y));
-        }
-        article.strArticle = m_pDAThread->strArticle;
-        article.ui.textBrowser->setPlainText(article.strArticle);
-        article.exec();
-        QString strSize = QString("%1 %2 %3 %4").arg(article.x()).arg(article.y()).arg(article.width()).arg(article.height());
-        Global::instance()->fileCfg()->setItemValue("global", "articledialog", strSize);
-        Global::instance()->fileCfg()->save();
+        showArticle(m_pDAThread->strArticle);
     } else if (e == DAE_TIMEOUT) {
         QMessageBox::warning(this, "timeout", "download article timeout, aborted");
     }
+}
+
+void Window::showArticle(const QString text)
+{
+    if (text.isEmpty()) {
+        return;
+    }
+    articleDialog article(this);
+    article.restoreGeometry(Global::instance()->fileCfg()->getItemValue("global", "articledialog").toByteArray());
+    article.strArticle = text;
+    article.ui.textBrowser->setPlainText(article.strArticle);
+    article.exec();
+    Global::instance()->fileCfg()->setItemValue("global", "articledialog", article.saveGeometry());
+    Global::instance()->fileCfg()->save();
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1539,7 +1500,7 @@ QByteArray  Window::parseString(const QByteArray& cstr, int *len)
     if (len != 0)
         *len = 0;
 
-    for (uint i = 0; i < cstr.length(); i++) {
+    for (int i = 0; i < cstr.length(); i++) {
         if (cstr.at(i) == '^') {
             i++;
             if (i < cstr.length()) {
@@ -1582,23 +1543,7 @@ void Window::replyMessage()
 
     cstr += '\n';
     m_pTelnet->write(cstr, cstr.length());
-    m_pMessage->display(tr("You have messages"), PageViewMessage::Info, 0);
-}
-
-void Window::saveSetting()
-{
-    if (m_nAddrIndex == -1 || !m_bSetChanged)
-        return;
-
-    QMessageBox mb("QTerm",
-                   tr("Setting changed do you want to save it?"),
-                   QMessageBox::Warning,
-                   QMessageBox::Yes | QMessageBox::Default,
-                   QMessageBox::No  | QMessageBox::Escape ,
-                   0, this);
-    if (mb.exec() == QMessageBox::Yes) {
-        Global::instance()->saveAddress(m_nAddrIndex, m_param);
-    }
+    m_pScreen->osd()->display(tr("You have messages"), PageViewMessage::Info, 0);
 }
 
 void Window::externInput(const QString & strText)
@@ -1651,7 +1596,7 @@ void Window::initScript()
     if (!m_param.m_bLoadScript)
         return;
     m_pBBS->setScript(m_scriptEngine, m_scriptHelper);
-    m_scriptHelper->import(m_param.m_strScriptFile);
+    m_scriptHelper->loadScript(m_param.m_strScriptFile);
     QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("init");
     if (!func.isFunction()) {
         qDebug() << "init is not a function";
@@ -1702,9 +1647,9 @@ void Window::saveLink()
 
 void Window::getHttpHelper(const QString& strUrl, bool bPreview)
 {
-    Http *pHttp = new Http(this);
+    Http *pHttp = new Http(this, m_codec);
     connect(pHttp, SIGNAL(done(QObject*)), this, SLOT(httpDone(QObject*)));
-    connect(pHttp, SIGNAL(message(const QString &)), m_pMessage, SLOT(showText(const QString &)));
+    connect(pHttp, SIGNAL(message(const QString &)), m_pScreen->osd(), SLOT(showText(const QString &)));
     pHttp->getLink(strUrl, bPreview);
 }
 
@@ -1713,9 +1658,26 @@ void Window::httpDone(QObject *pHttp)
     pHttp->deleteLater();
 }
 
-void Window::showMessage(const QString & message, int type, int duration)
+void Window::osdMessage(const QString & message, int type, int duration)
 {
-    m_pMessage->display(message, (PageViewMessage::Icon)type, duration);
+    m_pScreen->osd()->display(message, (PageViewMessage::Icon)type, duration);
+}
+
+void Window::showMessage(const QString & title, const QString & message, int duration)
+{
+#ifdef DBUS_ENABLED
+    if (DBus::instance()->notificationAvailable()) {
+        QList<DBus::Action> actions;
+        actions.append(DBus::Show_QTerm);
+        DBus::instance()->sendNotification(title, message, QImage(), actions);
+    } else
+#endif //DBUS_ENABLED
+    {
+        if (!m_pFrame->showMessage(title, message)) {
+            m_popWin->setText(message);
+            m_popWin->popup();
+        }
+    }
 }
 
 QMenu * Window::popupMenu()
@@ -1803,17 +1765,7 @@ void Window::updateWindow()
 
             if (!isActiveWindow() || m_pFrame->wndmgr->activeWindow() != this)
             {
-#ifdef DBUS_ENABLED
-                if (DBus::instance()->notificationAvailable()) {
-                    QList<DBus::Action> actions;
-                    actions.append(DBus::Show_QTerm);
-                    DBus::instance()->sendNotification("New Message in QTerm", strMsg, actions);
-                } else
-#endif //DBUS_ENABLED
-                {
-                    m_popWin->setText(strMsg);
-                    m_popWin->popup();
-                }
+                showMessage("New Message in QTerm", strMsg, -1);
             }
         if (m_bAutoReply) {
 #ifdef SCRIPT_ENABLED
@@ -1851,8 +1803,41 @@ void Window::updateWindow()
     //m_updateTimer->start(100);
     //refresh screen
     m_pScreen->m_ePaintState = Screen::NewData;
-    m_pScreen->update();
+    m_pScreen->repaint();
     m_bMessage = false;
+}
+
+void Window::loadKeyboardTranslator(const QString & filename)
+{
+    //const QString& path = name + ".keytab";
+    QFileInfo fi(filename);
+    QString path;
+    if (fi.exists()) {
+        path = filename;
+    } else {
+        qWarning() << "Fallback to default keyboard layout";
+        path = Global::instance()->pathLib() + "/keyboard_profiles/linux.keytab";
+    }
+    fi.setFile(path);
+    QString name = fi.baseName();
+    QFile source(path);
+    if (name.isEmpty() || !source.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+    m_translator = new KeyboardTranslator(name);
+    KeyboardTranslatorReader reader(&source);
+    m_translator->setDescription( reader.description() );
+    while ( reader.hasNextEntry() )
+        m_translator->addEntry(reader.nextEntry());
+
+    source.close();
+
+    if ( reader.parseError() )
+    {
+        delete m_translator;
+        m_translator = NULL;
+        return;
+    }
+    qDebug() << "Keyboard translator:" << name << "loaded";
 }
 
 }

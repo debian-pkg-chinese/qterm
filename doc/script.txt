@@ -93,9 +93,13 @@ void sendParsedString(const QString & string)
     Send parsed string to the BBS server. you can use '^M' to represent the
     return key for example.
 
-void showMessage(const QString & message, int icon = 1, int duration = 0)
+void osdMessage(const QString & message, int icon = 1, int duration = 0)
     Show message in the osd, icon = 0, 1, 2, 3 means No/Info/Warning/Error
     icon. Duration is in the unit of ms, 0 means forever.
+
+void showMessage(const QString & message, int duration = -1)
+    Show message in the notification area or system tray. duration is not
+    really useful for now.
 
 void cancelZmodem()
     Cancel the current zmodem transfer.
@@ -126,7 +130,7 @@ void addPopupSeparator()
 void addUrlSeparator()
     Add separators to the popup/url menu so they will look nicer.
 
-void import(const QString & filename)
+void loadScript(const QString & filename)
     Import external javascript files, QTerm will search the file under the
     "scripts" directory under the local path (e.g.SHOME/.qterm) first and then
     search the global path (e.g. /usr/share)
@@ -218,6 +222,9 @@ onTelnetState(int state)
 
 onZmodemState(int type, int value, const QString& msg)
     Handle zmodem events
+
+endOfArticle()
+    Implement this to check the end of articles for downloading articles
 
 There is also a signal: scriptEvent(const QString& type) which can be used by
 the script to emit and handle signals

@@ -52,6 +52,7 @@ class PageViewMessage;
 class ScriptHelper;
 #endif
 class HostInfo;
+class KeyboardTranslator;
 // thread copy article
 class DAThread : public QThread
 {
@@ -82,17 +83,19 @@ public:
         return m_bConnected;
     }
 
+    int index() {
+        return m_nAddrIndex;
+    }
+
 public slots:
     // ui
     void copy();
     void paste();
     void copyArticle();
     void setting();
-    void appearance();
     void runScript(const QString & filename="");
     void stopScript();
     void debugConsole();
-    void showStatusBar(bool);
     void reconnect();
     void sendParsedString(const QString &);
     void showIP();
@@ -107,8 +110,9 @@ public:
     void initScript();
     void externInput(const QString &);
     void getHttpHelper(const QString&, bool);
-    void showMessage(const QString &, int type, int duration);
-    Screen * getScreen()
+    void osdMessage(const QString &, int type, int duration);
+    void showMessage(const QString & title, const QString & message, int duration = -1);
+    Screen * screen()
     {
         return m_pScreen;
     }
@@ -146,6 +150,7 @@ protected slots:
     // decode
     void setMouseMode(bool);
     void jobDone(int);
+    void showArticle(const QString text);
 
 protected:
     void mouseDoubleClickEvent(QMouseEvent *);
@@ -165,7 +170,6 @@ protected:
     void reconnectProcess();
     void connectionClosed();
     void doAutoLogin();
-    void saveSetting();
     void replyMessage();
 
     void pasteHelper(bool);
@@ -175,6 +179,8 @@ protected:
 
     void closeEvent(QCloseEvent *);
     void keyPressEvent(QKeyEvent *);
+
+    void loadKeyboardTranslator(const QString & profile);
 
     Screen * m_pScreen;
     Decode * m_pDecode;
@@ -200,7 +206,6 @@ protected:
     QTimer * m_updateTimer;
 
     // address setting
-    bool m_bSetChanged;
     int m_nAddrIndex;
 
     bool m_bDoingLogin;
@@ -240,6 +245,7 @@ protected:
     bool m_bMouseClicked;
 
     QTextCodec * m_codec;
+    KeyboardTranslator * m_translator;
 #ifdef SCRIPT_ENABLED
     QScriptEngine * m_scriptEngine;
     ScriptHelper * m_scriptHelper;

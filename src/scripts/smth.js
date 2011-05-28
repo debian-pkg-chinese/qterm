@@ -1,9 +1,6 @@
-QTerm.import("utils.js");
-QTerm.import("highlight.js");
-//Enable this if you have qt bindings installed.
-//QTerm.import("console.js");
-//QTerm.import("websnap.js");
-//QTerm.import("senddelay.js");
+QTerm.loadScript("utils.js");
+QTerm.loadScript("highlight.js");
+QTerm.loadScript("google.js");
 
 QTerm.SMTH= {
     Unknown : -1,
@@ -17,7 +14,11 @@ QTerm.pageState = QTerm.SMTH.Unknown;
 
 QTerm.init = function()
 {
-    QTerm.showMessage("system script loaded", QTerm.OSDType.Info, 10000);
+    QTerm.osdMessage(qsTr("System script loaded"), QTerm.OSDType.Info, 10000);
+    if (QTerm.addPopupMenu( "aboutScript", qsTr("About This Script") ) ) {
+        QTerm.aboutScript.triggered.connect(QTerm.onAbout);
+    }
+
 }
 
 QTerm.setCursorType = function(x,y)
@@ -83,7 +84,7 @@ QTerm.setSelectRect = function(x, y)
         if (item.length > 0) {
             var index = line.getText().indexOf(item);
             rect[0] = line.beginIndex(index);
-            rect[1] = y
+            rect[1] = y;
             rect[2] = line.beginIndex(index+item.length) - rect[0];
             rect[3] = 1;
         }
@@ -91,9 +92,9 @@ QTerm.setSelectRect = function(x, y)
         if (y >= 2 && y < QTerm.rows() -1 && x > 12 && x < QTerm.columns() - 16 && QTerm.getText(y).search(/[^\s]/)!=-1) {
             QTerm.accepted = true;
             rect[0] = 0;
-            rect[1] = y - y%2;
+            rect[1] = y;
             rect[2] = QTerm.columns();
-            rect[3] = 2;
+            rect[3] = 1;
         }
     }
     return rect;
@@ -153,9 +154,18 @@ QTerm.onMouseEvent = function(type, button, buttons, modifiers, pt_x, pt_y)
 
 QTerm.sendKey = function(x, y)
 {
-    // Only handle the menu case
+    if (QTerm.getUrl().length > 0)
+        return false;
+
     var result;
-    if (QTerm.pageState == QTerm.SMTH.Menu) {
+    if (QTerm.pageState == QTerm.SMTH.Article && x < 12) {
+            if( QTerm.getText(QTerm.rows()-1).indexOf("%") != -1 ) {
+                QTerm.sendParsedString("^[[D");
+                QTerm.sendParsedString("^[[D");
+            } else
+                QTerm.sendParsedString("^[[D");
+            return true;
+    } else if (QTerm.pageState == QTerm.SMTH.Menu) {
         str = QTerm.getMenuItem(x,y);
         if (str == "") {
             return false;
@@ -168,7 +178,11 @@ QTerm.sendKey = function(x, y)
         var text = QTerm.getText(y - y%2);
         result = QTerm.getText(y - y%2).match(/\s+(\d+)\s+/);
         QTerm.sendString(result[1]);
-        QTerm.sendParsedString("^M");
+        if (y%2 == 0) {
+            QTerm.sendParsedString("s");
+        } else {
+            QTerm.sendParsedString("^M");
+        }
     }
     return false;
 }
@@ -176,7 +190,7 @@ QTerm.sendKey = function(x, y)
 QTerm.onKeyPressEvent = function(key, modifiers, text)
 {
 //    var msg = "The key pressed is: " + text;
-//    QTerm.showMessage(msg,1,1000);
+//    QTerm.osdMessage(msg,1,1000);
     QTerm.accepted = false;
 }
 
@@ -189,10 +203,8 @@ QTerm.onNewData = function()
 {
     QTerm.accepted = false;
     // This will highlight qterm and kde, function defined in highlight.js
+    QTerm.scriptEvent("QTerm: new data");
     QTerm.highlightKeywords(/qterm|kde/ig);
-// This is a ugly way to download article
-//    if (QTerm.Article.downloading)
-//        QTerm.Article.downloadArticle();
     return false;
 }
 
@@ -234,27 +246,43 @@ QTerm.onZmodemState = function(type, value, state)
 
 // Here is an example about how to add item to the popup menu.
 
+if (QTerm.qtbindingsAvailable) {
+    QTerm.loadScript("console.js");
+    QTerm.loadScript("senddelay.js");
+    QTerm.loadScript("article.js");
+    QTerm.onCopyArticle = function()
+    {
+        var text = ""
+        if (QTerm.pageState != QTerm.SMTH.Article)
+            QTerm.osdMessage(qsTr("No article to download"), QTerm.OSDType.Warning, 5000);
+        else
+            text = QTerm.Article.getArticle();
+        QTerm.accepted = true;
+        return text;
+    }
+} else {
+    QTerm.onCopyArticle = function()
+    {
+        QTerm.accepted = false;
+        return "";
+    }
+
+}
+
 QTerm.addPopupSeparator();
 
 QTerm.onAbout = function()
 {
-    msg = "You are using smth.js in QTerm " + QTerm.version() + " (C) 2009 QTerm Developers";
-    QTerm.showMessage(msg, QTerm.OSDType.Info, 10000);
+    msg = qsTr("You are using smth.js in QTerm %1 (C) 2009-2010 QTerm Developers").arg(QTerm.version());;
+    QTerm.osdMessage(msg, QTerm.OSDType.Info, 10000);
 }
 
-if (QTerm.addPopupMenu( "aboutScript", "About This Script" ) ) {
-        QTerm.aboutScript.triggered.connect(QTerm.onAbout);
-}
-
-/*
-QTerm.import("article.js");
-
-QTerm.onArticle = function()
+QTerm.endOfArticle = function()
 {
-    QTerm.Article.getArticle();
-}
+    if( QTerm.getText(QTerm.rows()-1).indexOf("%") == -1 ) {
+        return true;
+    } else {
+        return false;
+    }
 
-if (QTerm.addPopupMenu( "article", "Download Article" ) ) {
-        QTerm.article.triggered.connect(QTerm.onArticle);
 }
-*/

@@ -42,6 +42,12 @@ public:
     void popupFocusIn(Window * window = 0);
     void buzz();
     QMenu * genPopupMenu(QWidget * owner);
+    bool showMessage(const QString & title, const QString & message, int millisecondsTimeoutHint = 10000);
+
+public slots:
+    bool confirmExitQTerm();
+    void saveAndDisconnect();
+
 signals:
     void bossColor();
     void scrollChanged();
@@ -52,7 +58,6 @@ protected slots:
     // Menu
     void addressBook();
     void quickLogin();
-    void exitQTerm();
 
     void selectionChanged(int);
     void aboutQTerm();
@@ -80,7 +85,6 @@ protected slots:
     void updateScroll(QAction*);
     void updateSwitchBar(bool);
     void updateStatusBar(bool);
-    void appearance();
     void refresh();
     void triggerFullScreen(bool isFullScreen);
     void hideMenuBar(bool hide);
@@ -158,7 +162,6 @@ protected:
     QAction * m_S2TAction;
     QAction * m_T2SAction;
 
-    QAction * m_appearanceAction;
     QAction * m_refreshAction;
     QAction * m_engAction;
     QAction * m_chsAction;
@@ -169,7 +172,6 @@ protected:
     QAction * m_scrollHideAction;
     QAction * m_scrollLeftAction;
     QAction * m_scrollRightAction;
-    QAction * m_statusAction;
     QAction * m_switchAction;
 
 //  View
@@ -213,6 +215,8 @@ protected:
     //function
     void newWindow(const Param& param, int index = -1);
     void closeEvent(QCloseEvent *);
+    void keyPressEvent(QKeyEvent *);
+    void mouseReleaseEvent(QMouseEvent *);
     void selectStyleMenu(int , int);
     void iniSetting();
     void initActions();
@@ -223,6 +227,7 @@ protected:
     void loadShortcuts();
     void saveToolbars();
     void loadToolbars();
+    void loadSession();
 
     void addMainMenu();
     void addMainTool();

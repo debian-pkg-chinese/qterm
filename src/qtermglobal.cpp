@@ -24,6 +24,7 @@
 #include <QtCore/QVariant>
 #include <QtCore/QUrl>
 #include <QtCore/QProcess>
+#include <QtCore/QLibraryInfo>
 #include <QtGui/QApplication>
 #include <QtGui/QDesktopServices>
 #include <QtGui/QFileDialog>
@@ -191,10 +192,9 @@ bool Global::loadAddress(int n, Param& param)
     strTmp = m_address->getItemValue(strSection, "fontsize").toString();
     param.m_nFontSize = strTmp.toInt();
     param.m_strSchemeFile = m_address->getItemValue(strSection, "schemefile").toString();
+    param.m_strKeyboardProfile = m_address->getItemValue(strSection, "keyboardprofile").toString();
 
     param.m_strTerm = m_address->getItemValue(strSection, "termtype").toString();
-    strTmp = m_address->getItemValue(strSection, "keytype").toString();
-    param.m_nKey = strTmp.toInt();
     strTmp =  m_address->getItemValue(strSection, "column").toString();
     param.m_nCol = strTmp.toInt();
     strTmp =  m_address->getItemValue(strSection, "row").toString();
@@ -288,10 +288,9 @@ void Global::saveAddress(int n, const Param& param)
     strTmp.setNum(param.m_nFontSize);
     m_address->setItemValue(strSection, "fontsize", strTmp);
     m_address->setItemValue(strSection, "schemefile", param.m_strSchemeFile);
+    m_address->setItemValue(strSection, "keyboardprofile", param.m_strKeyboardProfile);
 
     m_address->setItemValue(strSection, "termtype", param.m_strTerm);
-    strTmp.setNum(param.m_nKey);
-    m_address->setItemValue(strSection, "keytype", strTmp);
     strTmp.setNum(param.m_nCol);
     m_address->setItemValue(strSection, "column", strTmp);
     strTmp.setNum(param.m_nRow);
@@ -491,6 +490,16 @@ bool Global::iniWorkingDir(QString param)
     m_pathLib = fi.path() + '/';
 #else
     QString prefix = QCoreApplication::applicationDirPath();
+
+    QFileInfo conf(prefix+"/qterm.cfg");
+    if (conf.exists()) {
+        QString path= QCoreApplication::applicationDirPath()+"/";
+        m_pathLib = path;
+        m_pathPic = path;
+        m_pathCfg = path;
+        return true;
+    }
+
     prefix.chop(3); // "bin"
     m_pathCfg = QDir::homePath() + "/.qterm/";
     if (!isPathExist(m_pathCfg))
@@ -557,29 +566,34 @@ bool Global::iniSettings()
         m_language = Global::English;
     }
     if (lang != "eng" && !lang.isEmpty()) {
-        // look in $HOME/.qterm/po/ first
-        QString qm = QDir::homePath() + "/.qterm/po/qterm_" + lang + ".qm";
-        if (!QFile::exists(qm))
-            qm = m_pathLib + "po/qterm_" + lang + ".qm";
+        QString qt_qm;
+        if (lang == "chs")
+            qt_qm = QLibraryInfo::location(QLibraryInfo::TranslationsPath)+"/qt_zh_CN.qm";
+        else
+            qt_qm = QLibraryInfo::location(QLibraryInfo::TranslationsPath)+"/qt_zh_TW.qm";
+
         static QTranslator * translator = new QTranslator(0);
-        translator->load(qm);
+        translator->load(qt_qm);
+        qApp->installTranslator(translator);
+
+        // look in $HOME/.qterm/po/ first
+        QString qterm_qm = QDir::homePath() + "/.qterm/po/qterm_" + lang + ".qm";
+        if (!QFile::exists(qterm_qm))
+            qterm_qm = m_pathLib + "po/qterm_" + lang + ".qm";
+        translator = new QTranslator(0);
+        translator->load(qterm_qm);
         qApp->installTranslator(translator);
     }
     //set font
     QString family = m_config->getItemValue("global", "font").toString();
     QString pointsize = m_config->getItemValue("global", "pointsize").toString();
-    QString pixelsize = m_config->getItemValue("global", "pixelsize").toString();
     if (!family.isEmpty()) {
         QFont font(family);
         if (pointsize.toInt() > 0)
             font.setPointSize(pointsize.toInt());
-        if (pixelsize.toInt() > 0)
-            font.setPixelSize(pixelsize.toInt());
-#if (QT_VERSION>=300)
         QString bAA = m_config->getItemValue("global", "antialias").toString();
         if (bAA != "0")
             font.setStyleStrategy(QFont::PreferAntialias);
-#endif
         qApp->setFont(font);
     }
 
@@ -660,11 +674,6 @@ Global::Conversion Global::clipConversion() const
 Global::Language Global::language() const
 {
     return m_language;
-}
-
-bool Global::showStatusBar() const
-{
-    return m_statusBar;
 }
 
 Global::Position Global::scrollPosition() const
@@ -810,8 +819,6 @@ void Global::saveConfig()
     m_config->setItemValue("global", "font", qApp->font().family());
     strTmp.setNum(QFontInfo(qApp->font()).pointSize());
     m_config->setItemValue("global", "pointsize", strTmp);
-    strTmp.setNum(QFontInfo(qApp->font()).pixelSize());
-    m_config->setItemValue("global", "pixelsize", strTmp);
 
     if (isFullScreen())
         m_config->setItemValue("global", "fullscreen", "1");
@@ -829,7 +836,6 @@ void Global::saveConfig()
     strTmp.setNum(scrollPosition());
     m_config->setItemValue("global", "vscrollpos", strTmp);
 
-    m_config->setItemValue("global", "statusbar", showStatusBar() ? "1" : "0");
     m_config->setItemValue("global", "switchbar", showSwitchBar() ? "1" : "0");
     saveShowToolBar();
     m_config->save();
@@ -854,6 +860,16 @@ void Global::saveGeometry(const QByteArray geometry)
 void Global::saveState(const QByteArray state)
 {
     m_config->setItemValue("global", "state", state);
+}
+
+void Global::saveSession(const QList<QVariant>& sites)
+{
+    m_config->setItemValue("global", "sites", sites);
+}
+
+QList<QVariant> Global::loadSession()
+{
+    return m_config->getItemValue("global", "sites").toList();
 }
 
 void Global::cleanup()

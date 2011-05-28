@@ -2,6 +2,25 @@
 <!DOCTYPE TS>
 <TS version="2.0" language="zh_CN">
 <context>
+    <name>Dialog</name>
+    <message>
+        <source>Send string with delay</source>
+        <translation>延迟发送字符串</translation>
+    </message>
+    <message>
+        <source>String:</source>
+        <translation>字符串:</translation>
+    </message>
+    <message>
+        <source>Repeating:</source>
+        <translation>重复次数:</translation>
+    </message>
+    <message>
+        <source>Delay(s):</source>
+        <translation>延迟(秒):</translation>
+    </message>
+</context>
+<context>
     <name>Form</name>
     <message>
         <source>Font Configuration</source>
@@ -20,51 +39,51 @@
     <name>QTerm::Canvas</name>
     <message>
         <source>zoom 1:1</source>
-        <translation>1:1</translation>
+        <translation type="obsolete">1:1</translation>
     </message>
     <message>
         <source>fit window</source>
-        <translation>适应窗口大小</translation>
+        <translation type="obsolete">适应窗口大小</translation>
     </message>
     <message>
         <source>zoom in</source>
-        <translation>放大</translation>
+        <translation type="obsolete">放大</translation>
     </message>
     <message>
         <source>zoom out</source>
-        <translation>缩小</translation>
+        <translation type="obsolete">缩小</translation>
     </message>
     <message>
         <source>fullscreen</source>
-        <translation>全屏显示</translation>
+        <translation type="obsolete">全屏显示</translation>
     </message>
     <message>
         <source>rotate CW 90</source>
-        <translation>顺时针旋转90</translation>
+        <translation type="obsolete">顺时针旋转90</translation>
     </message>
     <message>
         <source>rotate CCW 90</source>
-        <translation>逆时针旋转90</translation>
+        <translation type="obsolete">逆时针旋转90</translation>
     </message>
     <message>
         <source>save as</source>
-        <translation>保存</translation>
+        <translation type="obsolete">保存</translation>
     </message>
     <message>
         <source>copy to</source>
-        <translation>拷贝</translation>
+        <translation type="obsolete">拷贝</translation>
     </message>
     <message>
         <source>silent copy</source>
-        <translation>自动拷贝</translation>
+        <translation type="obsolete">自动拷贝</translation>
     </message>
     <message>
         <source>delete</source>
-        <translation>删除</translation>
+        <translation type="obsolete">删除</translation>
     </message>
     <message>
         <source>exit</source>
-        <translation>退出</translation>
+        <translation type="obsolete">退出</translation>
     </message>
     <message>
         <source>Choose a filename to save under</source>
@@ -77,6 +96,61 @@
     <message>
         <source>Cant save file, maybe format not supported</source>
         <translation>无法保存文件，可能是不支持的格式</translation>
+    </message>
+    <message>
+        <source>Original Size</source>
+        <translation>原始大小</translation>
+    </message>
+    <message>
+        <source>Fit Window</source>
+        <translation>适应窗口大小</translation>
+    </message>
+    <message>
+        <source>Zoom In</source>
+        <translation>放大</translation>
+    </message>
+    <message>
+        <source>Zoom Out</source>
+        <translation>缩小</translation>
+    </message>
+    <message>
+        <source>Fullscreen</source>
+        <translation>全屏显示</translation>
+    </message>
+    <message>
+        <source>Rotate CW 90</source>
+        <translation>顺时针旋转90</translation>
+    </message>
+    <message>
+        <source>Rotate CCW 90</source>
+        <translation>逆时针旋转90</translation>
+    </message>
+    <message>
+        <source>Save As...</source>
+        <translation>保存为...</translation>
+    </message>
+    <message>
+        <source>Copy To...</source>
+        <translation>拷贝到...</translation>
+    </message>
+    <message>
+        <source>Silent Copy</source>
+        <translation>自动拷贝</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation>退出</translation>
+    </message>
+</context>
+<context>
+    <name>QTerm::CloseDialog</name>
+    <message>
+        <source>QTerm will quit in %1 seconds</source>
+        <translation>QTerm 将在 %1 秒后退出</translation>
     </message>
 </context>
 <context>
@@ -232,7 +306,7 @@ please close all windows and restart.</source>
     </message>
     <message>
         <source>Status &amp;Bar</source>
-        <translation>状态栏(&amp;B)</translation>
+        <translation type="obsolete">状态栏(&amp;B)</translation>
     </message>
     <message>
         <source>S&amp;witch Bar</source>
@@ -316,11 +390,11 @@ please close all windows and restart.</source>
     </message>
     <message>
         <source>&amp;File</source>
-        <translation>文件(&amp;F)</translation>
+        <translation type="obsolete">文件(&amp;F)</translation>
     </message>
     <message>
         <source>&amp;Edit</source>
-        <translation>编辑(&amp;E)</translation>
+        <translation type="obsolete">编辑(&amp;E)</translation>
     </message>
     <message>
         <source>Paste &amp;with color</source>
@@ -332,7 +406,7 @@ please close all windows and restart.</source>
     </message>
     <message>
         <source>&amp;View</source>
-        <translation>视图(&amp;V)</translation>
+        <translation type="obsolete">视图(&amp;V)</translation>
     </message>
     <message>
         <source>&amp;Language</source>
@@ -348,23 +422,23 @@ please close all windows and restart.</source>
     </message>
     <message>
         <source>&amp;Option</source>
-        <translation>选项(&amp;O)</translation>
+        <translation type="obsolete">选项(&amp;O)</translation>
     </message>
     <message>
         <source>&amp;Special</source>
-        <translation>特殊功能(&amp;S)</translation>
+        <translation type="obsolete">特殊功能(&amp;S)</translation>
     </message>
     <message>
         <source>Scrip&amp;t</source>
-        <translation>脚本(&amp;T)</translation>
+        <translation type="obsolete">脚本(&amp;T)</translation>
     </message>
     <message>
         <source>&amp;Windows</source>
-        <translation>窗口(&amp;W)</translation>
+        <translation type="obsolete">窗口(&amp;W)</translation>
     </message>
     <message>
         <source>&amp;Help</source>
-        <translation>帮助(&amp;H)</translation>
+        <translation type="obsolete">帮助(&amp;H)</translation>
     </message>
     <message>
         <source>Key Setup</source>
@@ -460,7 +534,7 @@ please close all windows and restart.</source>
     </message>
     <message>
         <source>&amp;Appearance...</source>
-        <translation>外观(&amp;A)...</translation>
+        <translation type="obsolete">外观(&amp;A)...</translation>
     </message>
     <message>
         <source>&amp;Address Book...</source>
@@ -469,6 +543,38 @@ please close all windows and restart.</source>
     <message>
         <source>&amp;Quick Login...</source>
         <translation>快速连接(&amp;Q)...</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>文件</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>编辑</translation>
+    </message>
+    <message>
+        <source>View</source>
+        <translation>视图</translation>
+    </message>
+    <message>
+        <source>Option</source>
+        <translation>选项</translation>
+    </message>
+    <message>
+        <source>Special</source>
+        <translation>特殊功能</translation>
+    </message>
+    <message>
+        <source>Script</source>
+        <translation>脚本</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>窗口</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>帮助</translation>
     </message>
 </context>
 <context>
@@ -505,11 +611,22 @@ please close all windows and restart.</source>
     <name>QTerm::Image</name>
     <message>
         <source>Hide &amp;Browser</source>
-        <translation>隐藏浏览窗口(&amp;B)</translation>
+        <translation type="obsolete">隐藏浏览窗口(&amp;B)</translation>
     </message>
     <message>
         <source>Show &amp;Browser</source>
-        <translation>显示浏览窗口(&amp;B)</translation>
+        <translation type="obsolete">显示浏览窗口(&amp;B)</translation>
+    </message>
+</context>
+<context>
+    <name>QTerm::ImageFileModel</name>
+    <message>
+        <source>Name: %1
+Type: %2
+Size: %3 KB</source>
+        <translation>名称: %1
+类型: %2
+大小: %3 KB</translation>
     </message>
 </context>
 <context>
@@ -667,7 +784,15 @@ Do you want to clear and reassign?</source>
     </message>
     <message>
         <source>Setting changed do you want to save it?</source>
-        <translation>设置已更改，你要保存吗?</translation>
+        <translation type="obsolete">设置已更改，你要保存吗?</translation>
+    </message>
+    <message>
+        <source>URL:</source>
+        <translation>连接:</translation>
+    </message>
+    <message>
+        <source>IP database not found</source>
+        <translation>找不到 IP 数据库</translation>
     </message>
 </context>
 <context>
@@ -1152,32 +1277,20 @@ please close all windows and restart.</source>
 <context>
     <name>QTermImage</name>
     <message>
-        <source>Form1</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>&amp;Previous</source>
-        <translation>上一个(&amp;P)</translation>
-    </message>
-    <message>
-        <source>Alt+P</source>
-        <translation></translation>
+        <translation type="obsolete">上一个(&amp;P)</translation>
     </message>
     <message>
         <source>&amp;Browser</source>
-        <translation>浏览窗口(&amp;B)</translation>
-    </message>
-    <message>
-        <source>Alt+B</source>
-        <translation></translation>
+        <translation type="obsolete">浏览窗口(&amp;B)</translation>
     </message>
     <message>
         <source>&amp;Next</source>
-        <translation>下一个(&amp;N)</translation>
+        <translation type="obsolete">下一个(&amp;N)</translation>
     </message>
     <message>
-        <source>Alt+N</source>
-        <translation></translation>
+        <source>Image Viewer</source>
+        <translation>外置图片浏览器</translation>
     </message>
 </context>
 <context>
@@ -1330,7 +1443,7 @@ please close all windows and restart.</source>
     <name>ShortcutsDialog</name>
     <message>
         <source>Shortcuts Dialog</source>
-        <translation>快捷方式</translation>
+        <translation>快捷方式对话框</translation>
     </message>
     <message>
         <source>Actions</source>
@@ -1392,18 +1505,6 @@ please close all windows and restart.</source>
         <translation>文本在图标下</translation>
     </message>
     <message>
-        <source>16x16</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>32x32</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>48x48</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Text Position:</source>
         <translation>文本位置:</translation>
     </message>
@@ -1421,11 +1522,31 @@ please close all windows and restart.</source>
     </message>
     <message>
         <source>Cancel</source>
-        <translation>取消</translation>
+        <translation type="obsolete">取消</translation>
     </message>
     <message>
         <source>Default</source>
         <translation>默认值</translation>
+    </message>
+    <message>
+        <source>Available Actions:</source>
+        <translation>可用动作:</translation>
+    </message>
+    <message>
+        <source>16x16</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>22x22</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>32x32</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>48x48</source>
+        <translation></translation>
     </message>
     <message>
         <source>&lt;</source>
@@ -1442,10 +1563,6 @@ please close all windows and restart.</source>
     <message>
         <source>&gt;</source>
         <translation></translation>
-    </message>
-    <message>
-        <source>Available Actions:</source>
-        <translation>可用动作:</translation>
     </message>
 </context>
 <context>
@@ -1564,14 +1681,6 @@ p, li { white-space: pre-wrap; }
         <translation>名称:</translation>
     </message>
     <message>
-        <source>BBS</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>*NIX</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Port:</source>
         <translation>端口:</translation>
     </message>
@@ -1594,14 +1703,6 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Traditional Chinese to Simplified Chinese</source>
         <translation>繁体转简体</translation>
-    </message>
-    <message>
-        <source>Telnet</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>SSH</source>
-        <translation></translation>
     </message>
     <message>
         <source>Protocol:</source>
@@ -1630,14 +1731,6 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Display</source>
         <translation>显示</translation>
-    </message>
-    <message>
-        <source>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:&apos;Bitstream Vera Sans&apos;; font-size:12pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Auto Select Font Size When Resize Window&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation></translation>
     </message>
     <message>
         <source>Auto Select Font Size When Resize Window</source>
@@ -1732,14 +1825,6 @@ p, li { white-space: pre-wrap; }
         <translation>键盘类型:</translation>
     </message>
     <message>
-        <source>VT100</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>XTERM</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Term Type:</source>
         <translation>终端类型:</translation>
     </message>
@@ -1816,22 +1901,6 @@ p, li { white-space: pre-wrap; }
         <translation>无</translation>
     </message>
     <message>
-        <source>Wingate</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>SOCKS4</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>SOCKS5</source>
-        <translation></translation>
-    </message>
-    <message>
-        <source>HTTP</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Authentication</source>
         <translation>认证</translation>
     </message>
@@ -1890,6 +1959,38 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Color Scheme:</source>
         <translation>配色方案:</translation>
+    </message>
+    <message>
+        <source>BBS</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>*NIX</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Telnet</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>SSH</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>Wingate</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>SOCKS4</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>SOCKS5</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>HTTP</source>
+        <translation></translation>
     </message>
 </context>
 <context>
@@ -2151,7 +2252,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Select All</source>
-        <translation>全选</translation>
+        <translation type="obsolete">全选</translation>
     </message>
     <message>
         <source>Save...</source>
@@ -2159,7 +2260,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Copy</source>
-        <translation>拷贝</translation>
+        <translation type="obsolete">拷贝</translation>
     </message>
 </context>
 <context>
@@ -2183,6 +2284,67 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Close</source>
         <translation type="obsolete">关闭</translation>
+    </message>
+</context>
+<context>
+    <name>closeDialog</name>
+    <message>
+        <source>Dialog</source>
+        <translation></translation>
+    </message>
+    <message>
+        <source>The following sites are connected:</source>
+        <translation>已经连接到下列站点:</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>退出</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>console</name>
+    <message>
+        <source>Script Console</source>
+        <translation type="obsolete">脚本终端</translation>
+    </message>
+    <message>
+        <source>Execute Code</source>
+        <translation type="obsolete">执行代码</translation>
+    </message>
+    <message>
+        <source>QTerm Script Console</source>
+        <translation type="obsolete">QTerm 脚本终端</translation>
+    </message>
+    <message>
+        <source>The QTerm Script Console allows you to easily execute JavaScript with access to all functions
+and methods you would have in an QTerm script.
+Information on scripting for QTerm can be found in the doc directory of the QTerm source code.
+Execute code: CTRL-Enter
+Back in code history: Page Up
+Forward in code history: Page Down</source>
+        <translation type="obsolete">QTerm 脚本终端允许你轻松运行 JavaScript 脚本并调用所有你需要的 QTerm 函数和方法
+</translation>
+    </message>
+    <message>
+        <source>The QTerm Script Console allows you to easily execute JavaScript with access to
+all functions and methods you would have in an QTerm script.Information on
+scripting for QTerm can be found in the doc directory of the QTerm source code.
+Execute code: CTRL-Enter
+Back in code history: Page Up
+Forward in code history: Page Down</source>
+        <translation type="obsolete">QTerm 脚本终端允许你轻松运行 JavaScript 脚本并调用所有你需要的 QTerm 函数和方法。
+QTerm 脚本的相关文档可以在 QTerm 的源代码的 doc 目录下找到。
+执行代码: CTRL-Enter
+在代码历史中前进: Page Up
+在代码历史中后退: Page Down</translation>
+    </message>
+    <message>
+        <source>Script Console...</source>
+        <translation type="obsolete">脚本终端...</translation>
     </message>
 </context>
 <context>
@@ -2271,6 +2433,17 @@ Check whether your ESD support is enabled in compile time</source>
     <message>
         <source>Cancel</source>
         <translation type="obsolete">取消</translation>
+    </message>
+</context>
+<context>
+    <name>google</name>
+    <message>
+        <source>No text is selected to search for</source>
+        <translation type="obsolete">没有文字被选中</translation>
+    </message>
+    <message>
+        <source>Search Selected Text in Google</source>
+        <translation type="obsolete">用 Google 搜索选中文字</translation>
     </message>
 </context>
 <context>
@@ -3015,6 +3188,44 @@ Check whether your ESD support is enabled in compile time</source>
     </message>
 </context>
 <context>
+    <name>senddelay</name>
+    <message>
+        <source>Send String With Delay...</source>
+        <translation type="obsolete">延迟发送字符串...</translation>
+    </message>
+</context>
+<context>
+    <name>smth</name>
+    <message>
+        <source>System script loaded</source>
+        <translation type="obsolete">系统脚本加载成功</translation>
+    </message>
+    <message>
+        <source>No text is selected to search for</source>
+        <translation type="obsolete">没有文字被选中</translation>
+    </message>
+    <message>
+        <source>Search Selected Text in Google</source>
+        <translation type="obsolete">用 Google 搜索选中文字</translation>
+    </message>
+    <message>
+        <source>No article to download</source>
+        <translation type="obsolete">没有文章可下载</translation>
+    </message>
+    <message>
+        <source>You are using smth.js in QTerm %1 (C) 2009 QTerm Developers</source>
+        <translation type="obsolete">你当前使用 QTerm %1 中的 smth.js 脚本 (C) 2009 QTerm Developers</translation>
+    </message>
+    <message>
+        <source>About This Script</source>
+        <translation type="obsolete">关于当前脚本</translation>
+    </message>
+    <message>
+        <source>You are using smth.js in QTerm %1 (C) 2009-2010 QTerm Developers</source>
+        <translation type="obsolete">你当前使用 QTerm %1 中的 smth.js 脚本 (C) 2009-2010 QTerm Developers</translation>
+    </message>
+</context>
+<context>
     <name>soundConf</name>
     <message>
         <source>Configure</source>
@@ -3045,6 +3256,14 @@ Check whether your ESD support is enabled in compile time</source>
         <translation>用此播放:</translation>
     </message>
     <message>
+        <source>External</source>
+        <translation>外部程序</translation>
+    </message>
+    <message>
+        <source>Internal</source>
+        <translation>内置</translation>
+    </message>
+    <message>
         <source>ARTS</source>
         <translation></translation>
     </message>
@@ -3053,16 +3272,8 @@ Check whether your ESD support is enabled in compile time</source>
         <translation></translation>
     </message>
     <message>
-        <source>External</source>
-        <translation>外部程序</translation>
-    </message>
-    <message>
         <source>ESD</source>
         <translation></translation>
-    </message>
-    <message>
-        <source>Internal</source>
-        <translation>内置</translation>
     </message>
 </context>
 <context>
@@ -3072,12 +3283,12 @@ Check whether your ESD support is enabled in compile time</source>
         <translation>Zmodem 状态</translation>
     </message>
     <message>
-        <source>textLabel1</source>
-        <translation></translation>
-    </message>
-    <message>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <source>textLabel1</source>
+        <translation></translation>
     </message>
     <message>
         <source>textLabel2</source>

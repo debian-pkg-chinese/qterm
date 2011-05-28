@@ -38,12 +38,16 @@ addrDialog::addrDialog(QWidget* parent, bool partial, Qt::WFlags fl)
     ui.setupUi(this);
     ui.portSpinBox->setRange(0, 65535);
     ui.proxyportSpinBox->setRange(0, 65535);
+    ui.rowSpinBox->setRange(5,500);
+    ui.columnSpinBox->setRange(5,500);
+    ui.scrollSpinBox->setRange(0,1000000);
     QList<QByteArray> codecList = QTextCodec::availableCodecs();
     QByteArray codecName;
     foreach(codecName, codecList) {
         ui.bbscodeComboBox->addItem(QString::fromLatin1(codecName));
     }
     updateSchemeList();
+    updateKeyboardProfiles();
     if (bPartial) {
         ui.nameListWidget->hide();
         ui.Line->hide();
@@ -76,6 +80,7 @@ addrDialog::addrDialog(QWidget* parent, bool partial, Qt::WFlags fl)
         ui.nameListWidget->setFocus(Qt::OtherFocusReason);
     }
     connectSlots();
+    ui.connectPushButton->setDefault(true);
 }
 
 /*
@@ -93,6 +98,39 @@ void addrDialog::updateSchemeList()
         Config *pConf = new Config(file);
         ui.schemeComboBox->addItem(pConf->getItemValue("scheme", "title").toString());
         delete pConf;
+    }
+}
+
+void addrDialog::updateKeyboardProfiles()
+{
+    QDir dir;
+    QFileInfoList lstFile;
+
+    dir.setNameFilters(QStringList("*.keytab"));
+
+#if !defined(_OS_WIN32_) && !defined(Q_OS_WIN32)
+    dir.setPath(Global::instance()->pathCfg() + "/keyboard_profiles");
+    lstFile = dir.entryInfoList();
+    //if( lstFile.count()!=0 )
+    {
+        foreach(QFileInfo fi, lstFile) {
+            keyboardProfileList.append(fi.absoluteFilePath());
+        }
+    }
+#endif
+
+    dir.setPath(Global::instance()->pathLib() + "/keyboard_profiles");
+    lstFile = dir.entryInfoList();
+    //if(lstFile != NULL)
+    {
+        foreach(QFileInfo fi, lstFile) {
+            keyboardProfileList.append(fi.absoluteFilePath());
+        }
+    }
+    foreach (QString file, keyboardProfileList) {
+        QFileInfo fi(file);
+        QString base = fi.baseName();
+        ui.keytypeComboBox->addItem(base);
     }
 }
 
@@ -255,6 +293,13 @@ void addrDialog::onScheme(int i)
         strSchemeFile = schemeFileList[i];
 }
 
+void addrDialog::onKeyboardProfile(int i)
+{
+    if (i >= 0 && i < keyboardProfileList.size()) {
+        strKeyboardProfile = keyboardProfileList[i];
+    }
+}
+
 void addrDialog::onProtocol(int n)
 {
 #ifndef SSH_ENABLED
@@ -309,7 +354,7 @@ void addrDialog::connectSlots()
 
     connect(ui.schemePushButton, SIGNAL(clicked()), this, SLOT(onConfigScheme()));
 
-    connect(ui.protocolComboBox, SIGNAL(activated(int)), this, SLOT(onProtocol(int)));
+    connect(ui.protocolComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocol(int)));
 
     connect(ui.scriptPushButton, SIGNAL(clicked()), this, SLOT(onChooseScript()));
 
@@ -318,6 +363,7 @@ void addrDialog::connectSlots()
     connect(ui.generalFontComboBox, SIGNAL(currentFontChanged(const QFont &)), this, SLOT(onGeneralFont(const QFont &)));
     connect(ui.fontSizeSpinBox, SIGNAL(valueChanged(int)), this, SLOT(onFontSize(int)));
     connect(ui.schemeComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onScheme(int)));
+    connect(ui.keytypeComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onKeyboardProfile(int)));
 }
 
 bool addrDialog::isChanged()
@@ -340,11 +386,11 @@ bool addrDialog::isChanged()
            param.m_strGeneralFontName != strGeneralFontName||
            param.m_nFontSize != nFontSize ||
            param.m_strSchemeFile != strSchemeFile ||
+           param.m_strKeyboardProfile != strKeyboardProfile||
            param.m_strTerm != ui.termtypeLineEdit->text() ||
-           param.m_nKey != ui.keytypeComboBox->currentIndex() ||
-           param.m_nCol != ui.columnLineEdit->text().toInt() ||
-           param.m_nRow != ui.rowLineEdit->text().toInt() ||
-           param.m_nScrollLines != ui.scrollLineEdit->text().toInt() ||
+           param.m_nCol != ui.columnSpinBox->value() ||
+           param.m_nRow != ui.rowSpinBox->value() ||
+           param.m_nScrollLines != ui.scrollSpinBox->value() ||
            param.m_nCursorType != ui.cursorTypeComboBox->currentIndex() ||
            param.m_strEscape != ui.escapeLineEdit->text() ||
            param.m_nProxyType != ui.proxytypeComboBox->currentIndex() ||
@@ -390,11 +436,11 @@ void addrDialog::updateData(bool save)
         param.m_strGeneralFontName = strGeneralFontName;
         param.m_nFontSize = nFontSize;
         param.m_strSchemeFile = strSchemeFile;
+        param.m_strKeyboardProfile = strKeyboardProfile;
         param.m_strTerm = ui.termtypeLineEdit->text();
-        param.m_nKey = ui.keytypeComboBox->currentIndex();
-        param.m_nCol = ui.columnLineEdit->text().toInt();
-        param.m_nRow = ui.rowLineEdit->text().toInt();
-        param.m_nScrollLines = ui.scrollLineEdit->text().toInt();
+        param.m_nCol = ui.columnSpinBox->value();
+        param.m_nRow = ui.rowSpinBox->value();
+        param.m_nScrollLines = ui.scrollSpinBox->value();
         param.m_nCursorType = ui.cursorTypeComboBox->currentIndex();
         param.m_strEscape = ui.escapeLineEdit->text();
         param.m_nProxyType = ui.proxytypeComboBox->currentIndex();
@@ -419,6 +465,7 @@ void addrDialog::updateData(bool save)
         param.m_nMenuType = ui.menuTypeComboBox->currentIndex();
         param.m_clrMenu = clrMenu;
     } else { // from param to display
+        disconnect(ui.protocolComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocol(int)));
         QString strTmp;
         ui.nameLineEdit->setText(param.m_strName);
         ui.addrLineEdit->setText(param.m_strAddr);
@@ -447,14 +494,12 @@ void addrDialog::updateData(bool save)
         ui.fontSizeSpinBox->setValue(nFontSize);
         strSchemeFile = param.m_strSchemeFile;
         ui.schemeComboBox->setCurrentIndex(schemeFileList.indexOf(strSchemeFile));
+        strKeyboardProfile = param.m_strKeyboardProfile;
+        ui.keytypeComboBox->setCurrentIndex(keyboardProfileList.indexOf(strKeyboardProfile));
         ui.termtypeLineEdit->setText(param.m_strTerm);
-        ui.keytypeComboBox->setCurrentIndex(param.m_nKey);
-        strTmp.setNum(param.m_nCol);
-        ui.columnLineEdit->setText(strTmp);
-        strTmp.setNum(param.m_nRow);
-        ui.rowLineEdit->setText(strTmp);
-        strTmp.setNum(param.m_nScrollLines);
-        ui.scrollLineEdit->setText(strTmp);
+        ui.columnSpinBox->setValue(param.m_nCol);
+        ui.rowSpinBox->setValue(param.m_nRow);
+        ui.scrollSpinBox->setValue(param.m_nScrollLines);
         ui.cursorTypeComboBox->setCurrentIndex(param.m_nCursorType);
         ui.escapeLineEdit->setText(param.m_strEscape);
         ui.proxytypeComboBox->setCurrentIndex(param.m_nProxyType);
@@ -467,7 +512,6 @@ void addrDialog::updateData(bool save)
         ui.proxyuserLineEdit->setText(param.m_strProxyUser);
         ui.proxypasswdLineEdit->setText(param.m_strProxyPasswd);
         ui.protocolComboBox->setCurrentIndex(param.m_nProtocolType);
-        onProtocol(param.m_nProtocolType);
         strTmp.setNum(param.m_nMaxIdle);
         ui.idletimeLineEdit->setText(strTmp);
         ui.replykeyLineEdit->setText(param.m_strReplyKey);
@@ -491,6 +535,7 @@ void addrDialog::updateData(bool save)
         //QRadioButton * rbMenu = qobject_cast<QRadioButton*>(bgMenu.button(param.m_nMenuType));
         //rbMenu->setChecked(true);
         clrMenu = param.m_clrMenu;
+        connect(ui.protocolComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocol(int)));
     }
 }
 

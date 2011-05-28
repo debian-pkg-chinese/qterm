@@ -88,7 +88,6 @@ public:
     const QString & escapeString() const;
     Conversion clipConversion() const;
     Language language() const;
-    bool showStatusBar() const;
     Position scrollPosition() const;
     bool isFullScreen() const;
     bool showSwitchBar() const;
@@ -112,6 +111,8 @@ public:
     QByteArray loadState();
     void saveGeometry( const QByteArray geometry);
     void saveState( const QByteArray state);
+    void saveSession(const QList<QVariant>& sites);
+    QList<QVariant> loadSession();
     void cleanup();
     void openUrl(const QString & url);
     QString convert(const QString & source, Conversion flag);

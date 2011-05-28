@@ -23,6 +23,7 @@ AUTHOR:        kingson fiasco
 #include "qtermconfig.h"
 #include "qtermglobal.h"
 #include "schemedialog.h"
+#include "osdmessage.h"
 
 #include <QApplication>
 #include <QPainter>
@@ -68,6 +69,7 @@ Screen::Screen(QWidget *parent, Buffer *buffer, Param *param, BBS *bbs)
     m_inputContent = NULL;
     m_pASCIIFont = NULL;
     m_pGeneralFont = NULL;
+    m_pMessage = new PageViewMessage(this);
 
     setFocusPolicy(Qt::ClickFocus);
     setAttribute(Qt::WA_InputMethodEnabled, true);
@@ -111,6 +113,11 @@ Screen::Screen(QWidget *parent, Buffer *buffer, Param *param, BBS *bbs)
     m_blinkScreen = false;
     m_blinkCursor = true;
 
+}
+
+PageViewMessage * Screen::osd()
+{
+    return m_pMessage;
 }
 
 Screen::~Screen()
@@ -283,8 +290,12 @@ void Screen::wheelEvent(QWheelEvent * we)
 {
     if (Global::instance()->m_pref.bWheel)
         QApplication::sendEvent(m_pWindow, we);
-    else
-        QApplication::sendEvent(m_scrollBar, we);
+    else {
+        int old_value = m_scrollBar->value();
+        int step = m_scrollBar->singleStep()*we->delta()/8/15;
+        m_scrollBar->setValue(old_value-step);
+        we->accept();
+    }
 }
 
 
@@ -310,6 +321,8 @@ void Screen::initFontMetrics()
 
     m_pASCIIFont->setStyleStrategy(Global::instance()->m_pref.bAA ? QFont::PreferAntialias : QFont::NoAntialias);
     m_pGeneralFont->setStyleStrategy(Global::instance()->m_pref.bAA ? QFont::PreferAntialias : QFont::NoAntialias);
+    getFontMetrics();
+    m_pMessage->setFont(*m_pGeneralFont);
 }
 
 void Screen::updateFont()
@@ -342,7 +355,6 @@ void Screen::updateFont()
     marginw=marginh=0;
     if (Frame::instance()->isMaximized()||Frame::instance()->isFullScreen()) {
         marginw = (m_rcClient.width() - (m_pBuffer->columns()*m_nCharWidth))/2;
-        marginh = (m_rcClient.height() - (m_pBuffer->line()*m_nCharHeight))/2;
     }
     QPoint point = m_rcClient.topLeft();
     m_rcClient = QRect(point.x()+marginw, point.y()+marginh, m_pBuffer->columns()*m_nCharWidth, m_pBuffer->line()*m_nCharHeight);
@@ -354,6 +366,7 @@ void Screen::updateFont()
         delete m_inputContent;
         m_inputContent = NULL;
     }
+    m_pMessage->setFont(*m_pGeneralFont);
 }
 
 void Screen::getFontMetrics()
@@ -368,7 +381,7 @@ void Screen::getFontMetrics()
         m_nCharWidth = (qMax(en, cn) + 1) / 2;
 
     m_nCharDelta = m_nCharWidth - cn/2;
-    m_nCharHeight = ascii_fm.height();
+    m_nCharHeight = qMax(ascii_fm.height(),general_fm.height());
     m_nCharAscent = ascii_fm.ascent();
     m_nCharDescent = ascii_fm.descent();
 }
@@ -394,6 +407,7 @@ void Screen::generalFontChanged(const QFont & font)
     m_pGeneralFont = new QFont(font);
     m_pASCIIFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
     m_pGeneralFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
+    m_pMessage->setFont(*m_pGeneralFont);
     QResizeEvent* re = new QResizeEvent(size(), size());
     resizeEvent(re);
 }
@@ -437,7 +451,7 @@ void Screen::setScheme()
     m_color[4]  = Qt::darkBlue;
     m_color[5]  = Qt::darkMagenta;
     m_color[6]  = Qt::darkCyan;
-    m_color[7]  = Qt::darkGray;
+    m_color[7]  = Qt::lightGray;
     m_color[8]  = Qt::gray;
     m_color[9]  = Qt::red;
     m_color[10] = Qt::green;

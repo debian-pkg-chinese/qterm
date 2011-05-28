@@ -1,12 +1,11 @@
-QTerm 0.5.7
+QTerm 0.5.11
 ===============
 
 这个版本添加/修正了下面一些功能:
-1. 分别设置字体
-2. 编辑配色方案
-3. 更多脚本
-4. 再次改变地址簿格式
-5. Bug fixes
+1. 支持 Unicode 补完计划 (UAO)
+2. 重写了图片浏览器
+3. 增强脚本支持
+4. 各种 Bug fixes
 
                                          The QTerm Team
                                       http://www.qterm.org
