@@ -11,6 +11,12 @@ option(QTERM_ENABLE_SCRIPT_DEBUGGER "Build ScriptDebugger Support")
 include(CheckFunctionExists)
 include(CheckLibraryExists)
 
+if(UNIX)
+   find_package(X11)
+   set(optionalLibs ${optionalLibs} ${X11_X11_LIB})
+endif(UNIX)
+
+
 check_function_exists("gethostbyname" CMAKE_HAVE_GETHOSTBYNAME)
 if(NOT CMAKE_HAVE_GETHOSTBYNAME)
   check_library_exists("nsl" "gethostbyname" "" CMAKE_LIB_NSL_HAS_GETHOSTBYNAME)
@@ -105,6 +111,7 @@ set(qterm_SRCS
    ui_articledialog.h
    ui_imageviewer.h
    ui_keydialog.h
+   ui_mainframe.h
    ui_msgdialog.h
    ui_prefdialog.h
    ui_quickdialog.h
@@ -115,9 +122,11 @@ set(qterm_SRCS
    ui_toolbardialog.h
    ui_zmodemdialog.h
    ui_closedialog.h
+   ui_pallete.h
    aboutdialog.cpp
    addrdialog.cpp
    articledialog.cpp
+   assistantclient.cpp
    imageviewer.cpp
    imagelistviewer.cpp
    keydialog.cpp
@@ -146,7 +155,7 @@ set(qterm_SRCS
    qtermtextline.cpp
    qtermtoolbutton.cpp
    qtermwindow.cpp
-   qtermwndmgr.cpp
+   qtermwindowbase.cpp
    qtermzmodem.cpp
    qtermglobal.cpp
    quickdialog.cpp
@@ -160,13 +169,19 @@ set(qterm_SRCS
    keyboardtranslator.cpp
    closedialog.cpp
    uaocodec.cpp
+   dommodel.cpp
+   pallete.cpp
+   chartable.cpp
+   blur.cpp
    ${optionalSources})
 set(qterm_UIS
    ui/aboutdialog.ui
    ui/addrdialog.ui
    ui/articledialog.ui
+   ui/closedialog.ui
    ui/imageviewer.ui
    ui/keydialog.ui
+   ui/mainframe.ui
    ui/msgdialog.ui
    ui/prefdialog.ui
    ui/quickdialog.ui
@@ -175,12 +190,17 @@ set(qterm_UIS
    ui/soundconf.ui
    ui/sshlogin.ui
    ui/toolbardialog.ui
-   ui/closedialog.ui
-   ui/zmodemdialog.ui)
+   ui/zmodemdialog.ui
+   ui/pallete.ui)
 set(qterm_MISC
-   address.cfg
+   address.xml
    credits
    qterm.cfg)
+set(qterm_RCCS
+    qterm.qrc)
+
+file(COPY ${qterm_MISC} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 if(WIN32)
   if(MINGW)
     # resource compilation for mingw
@@ -197,6 +217,7 @@ if(WIN32)
     set(optionalLibs ${optionalLibs} ${WIN32_WS2_LIBRARY})
   endif(WIN32_WS2_LIBRARY)
 endif(WIN32)
+qt4_add_resources(qterm_RCCS_SRCS ${qterm_RCCS})
 qt4_wrap_ui(qterm_UIS_H ${qterm_UIS})
 qt4_automoc(${qterm_SRCS})
 add_definitions( -DHAVE_CONFIG_H )
@@ -210,15 +231,16 @@ include_directories(
    ${CMAKE_CURRENT_BINARY_DIR}
    ${CMAKE_CURRENT_SOURCE_DIR})
 if(WIN32)
-   add_executable(qterm WIN32 ${qterm_SRCS})
+   add_executable(qterm WIN32 ${qterm_SRCS} ${qterm_RCCS_SRCS})
 else(WIN32)
-   add_executable(qterm ${qterm_SRCS})
+   add_executable(qterm ${qterm_SRCS} ${qterm_RCCS_SRCS})
 endif(WIN32)
 target_link_libraries(qterm
    ${QT_LIBRARIES}
    ${QT_QTCORE_LIBRARY}
    ${QT_QTGUI_LIBRARY}
    ${QT_QTNETWORK_LIBRARY}
+   ${QT_QTXML_LIBRARY}
    ${optionalLibs})
 if(WIN32 AND MINGW)
    target_link_libraries(qterm ${win32Libs})
@@ -226,13 +248,12 @@ endif(WIN32 AND MINGW)
 install(TARGETS qterm DESTINATION bin)
 install(FILES ${qterm_MISC} DESTINATION share/qterm)
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/qterm.desktop DESTINATION share/applications)
-add_subdirectory(pic)
-add_subdirectory(cursor)
 add_subdirectory(scheme)
 add_subdirectory(scripts)
 add_subdirectory(po)
 add_subdirectory(keyboard_profiles)
-add_dependencies(qterm translations_target)
+add_subdirectory(doc)
+add_dependencies(qterm translations_target help_target)
 if(QTERM_ENABLE_TEST)
    add_subdirectory(test)
 endif(QTERM_ENABLE_TEST)

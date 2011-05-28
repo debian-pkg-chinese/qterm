@@ -2,7 +2,7 @@
 ** Form implementation generated from reading ui file 'keydialog.ui'
 **
 ** Created: Thu Jan 2 20:10:25 2003
-**      by: The User Interface Compiler ($Id: keydialog.cpp 1188 2010-06-12 19:43:42Z hephooey $)
+**      by: The User Interface Compiler ($Id: keydialog.cpp 532 2008-11-24 21:39:21Z hephooey $)
 **
 ** WARNING! All changes made in this file will be lost!
 ****************************************************************************/

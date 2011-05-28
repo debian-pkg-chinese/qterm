@@ -8,6 +8,7 @@
 ****************************************************************************/
 #include "addrdialog.h"
 
+#include "dommodel.h"
 #include "qtermparam.h"
 #include "qtermconfig.h"
 #include "qtermglobal.h"
@@ -21,7 +22,10 @@
 #include <QPainter>
 #include <QFileDialog>
 #include <QPalette>
+#include <QMenu>
 #include <QtCore/QTextCodec>
+#include <QtCore/QUuid>
+#include <QtCore/QTextStream>
 namespace QTerm
 {
 
@@ -33,14 +37,9 @@ namespace QTerm
  *  TRUE to construct a modal dialog.
  */
 addrDialog::addrDialog(QWidget* parent, bool partial, Qt::WFlags fl)
-        : QDialog(parent, fl), bPartial(partial), bgMenu(this), nLastItem(-1)
+        : QDialog(parent, fl), bPartial(partial), bgMenu(this)
 {
     ui.setupUi(this);
-    ui.portSpinBox->setRange(0, 65535);
-    ui.proxyportSpinBox->setRange(0, 65535);
-    ui.rowSpinBox->setRange(5,500);
-    ui.columnSpinBox->setRange(5,500);
-    ui.scrollSpinBox->setRange(0,1000000);
     QList<QByteArray> codecList = QTextCodec::availableCodecs();
     QByteArray codecName;
     foreach(codecName, codecList) {
@@ -49,10 +48,8 @@ addrDialog::addrDialog(QWidget* parent, bool partial, Qt::WFlags fl)
     updateSchemeList();
     updateKeyboardProfiles();
     if (bPartial) {
-        ui.nameListWidget->hide();
+        ui.nameTreeView->hide();
         ui.Line->hide();
-        ui.addPushButton->hide();
-        ui.deletePushButton->hide();
         ui.connectPushButton->hide();
         ui.closePushButton->setText(tr("Cancel"));
         ui.applyPushButton->setText(tr("OK"));
@@ -69,18 +66,17 @@ addrDialog::addrDialog(QWidget* parent, bool partial, Qt::WFlags fl)
         setMinimumSize(QSize(800, 600));
         setMaximumSize(QSize(800, 600));
         setWindowTitle(tr("AddressBook"));
-        ui.nameListWidget->addItems(Global::instance()->loadNameList());
-        if (ui.nameListWidget->count() > 0) {
-            Global::instance()->loadAddress(0, param);
-            ui.nameListWidget->setCurrentRow(0);
-        } else // the default
-            if (Global::instance()->addrCfg()->hasSection("default"))
-                Global::instance()->loadAddress(-1, param);
+		
+        QDomDocument doc = Global::instance()->addrXml();
+        domModel = new DomModel(doc);
+        ui.nameTreeView->setModel(domModel);
+
+        // load the default
+        Global::instance()->loadAddress(doc, QUuid().toString(), param);
         updateData(false);
-        ui.nameListWidget->setFocus(Qt::OtherFocusReason);
+        ui.nameTreeView->setFocus(Qt::OtherFocusReason);
     }
     connectSlots();
-    ui.connectPushButton->setDefault(true);
 }
 
 /*
@@ -88,6 +84,11 @@ addrDialog::addrDialog(QWidget* parent, bool partial, Qt::WFlags fl)
  */
 addrDialog::~addrDialog()
 {
+}
+
+QString addrDialog :: uuid() 
+{ 
+	return domModel->data(lastIndex, Qt::UserRole).toString(); 
 }
 
 void addrDialog::updateSchemeList()
@@ -134,9 +135,46 @@ void addrDialog::updateKeyboardProfiles()
     }
 }
 
-void addrDialog::onNamechange(int item)
+void addrDialog::onPopupTreeContextMenu(const QPoint& point)
 {
-    if (isChanged()) {
+	QModelIndex index = ui.nameTreeView->indexAt(point);
+	DomModel::ItemType type = domModel->type(index);
+	DomModel::ItemType parentType = domModel->type(index.parent());
+
+	QMenu menu;
+	QAction *actionFolder=0, *actionFavorite=0, *actionRemove=0, *actionSite;
+	
+	actionFolder = menu.addAction(tr("New Folder"));
+	actionSite = menu.addAction(tr("New Site"));
+
+	if (type != DomModel::Unknown) {
+		actionRemove = menu.addAction(tr("Remove"));
+	}
+	if (type == DomModel::Site ) {
+		actionFavorite = menu.addAction(tr("Add Favorite"));
+	}
+	if (type == DomModel::Favorite) {
+		actionFavorite = menu.addAction(tr("Clear Favorite"));
+	}
+	QAction *actionActive = menu.exec(mapToGlobal(point),actionFolder);
+	if (actionActive != 0) {
+		if (actionActive == actionFolder)
+			domModel->addFolder(index);
+		else if (actionActive == actionFavorite)
+			domModel->toggleFavorite(index);
+		else if (actionActive == actionSite)
+			domModel->addSite(index);
+		else if (actionActive == actionRemove)
+			domModel->removeItem(index);
+	}
+}
+
+void addrDialog::onNamechange(const QModelIndex & index)
+{
+    if (domModel->type(index) == DomModel::Folder)
+		return;
+
+    if (lastIndex.isValid() && isChanged()) {
         QMessageBox mb("QTerm",
                        tr("Setting changed, do you want to save?"),
                        QMessageBox::Warning,
@@ -145,98 +183,42 @@ void addrDialog::onNamechange(int item)
                        0, this, 0);
         if (mb.exec() == QMessageBox::Yes) {
             updateData(true);
-            if (nLastItem != -1) {
-                Global::instance()->saveAddress(nLastItem, param);
-                ui.nameListWidget->item(nLastItem)->setText(param.m_strName);
-                ui.nameListWidget->setCurrentRow(item);
-                return;
+			if (lastIndex.isValid()) {
+				QString uuid = domModel->data(lastIndex,Qt::UserRole).toString();
+				if (!QUuid(uuid).isNull())
+					Global::instance()->saveAddress(domModel->document(), uuid, param);
             }
         }
     }
-    nLastItem = item;
-    Global::instance()->loadAddress(item, param);
+    lastIndex = index;
+	QString uuid = domModel->data(index, Qt::UserRole).toString();
+	if (!uuid.isEmpty())
+		Global::instance()->loadAddress(domModel->document(), uuid, param);
     updateData(false);
 }
 
-void addrDialog::onAdd()
-{
-    QString strTmp;
-    Config * pConf = Global::instance()->addrCfg();
-    strTmp = pConf->getItemValue("bbs list", "num").toString();
-    int num = strTmp.toInt();
-
-    int index = ui.nameListWidget->currentRow();
-
-    // change section names after the insert point
-    QString strSection;
-    for (int i = num - 1; i > index; i--) {
-        strSection = QString("bbs %1").arg(i);
-        strTmp = QString("bbs %1").arg(i + 1);
-        //strSection.sprintf("bbs %d",i);
-        //strTmp.sprintf("bbs %d",i+1);
-        pConf->renameSection(strSection, strTmp);
-    }
-    // add list number by one
-    strTmp.setNum(num + 1);
-    pConf->setItemValue("bbs list", "num", strTmp);
-    // update the data
-    updateData(true);
-    Global::instance()->saveAddress(index + 1, param);
-
-    // insert it to the listbox
-    ui.nameListWidget->insertItem(index + 1, param.m_strName);
-    ui.nameListWidget->setItemSelected(ui.nameListWidget->item(index + 1), true);
-}
-void addrDialog::onDelete()
-{
-    QString strTmp;
-    Config * pConf = Global::instance()->addrCfg();
-    strTmp = pConf->getItemValue("bbs list", "num").toString();
-    int num = strTmp.toInt();
-
-    if (ui.nameListWidget->count() == 0)
-        return;
-    int index = ui.nameListWidget->currentRow();
-
-    // delete the section
-    QString strSection = QString("bbs %1").arg(index);
-//  strSection.sprintf("bbs %d",index);
-    Global::instance()->removeAddress(index);
-    // change the number after that
-    for (int i = index + 1; i < num; i++) {
-        strSection = QString("bbs %1").arg(i);
-        strTmp = QString("bbs %1").arg(i-1);
-//   strSection.sprintf("bbs %d",i);
-//   strTmp.sprintf("bbs %d",i-1);
-        pConf->renameSection(strSection, strTmp);
-    }
-    // ass list number by one
-    strTmp.setNum(qMax(0, num - 1));
-    pConf->setItemValue("bbs list", "num", strTmp);
-    // delete it from name listbox
-    Global::instance()->loadAddress(qMin(index, num - 2), param);
-    updateData(false);
-    ui.nameListWidget->takeItem(index);
-    ui.nameListWidget->setItemSelected(ui.nameListWidget->item(qMin(index, ui.nameListWidget->count() - 1)), true);
-}
 void addrDialog::onApply()
 {
     updateData(true);
     if (!bPartial) {
-        Global::instance()->saveAddress(ui.nameListWidget->currentRow(), param);
-        if (ui.nameListWidget->count() != 0)
-            ui.nameListWidget->item(ui.nameListWidget->currentRow())->setText(param.m_strName);
+		QString uuid = domModel->data(lastIndex,Qt::UserRole).toString();
+		if (!uuid.isEmpty())
+			Global::instance()->saveAddress(domModel->document(), uuid, param);
+		Global::instance()->saveAddressXml(domModel->document());
     } else
         done(1);
 }
 void addrDialog::onClose()
 {
     if (!bPartial)
-        Global::instance()->addrCfg()->save();
+        Global::instance()->saveAddressXml(domModel->document());
     done(0);
 }
-void addrDialog::onConnect()
+void addrDialog::onConnect(const QModelIndex & index)
 {
+    if (domModel->type(index) == DomModel::Folder)
+		return;
+
     if (isChanged()) {
         QMessageBox mb("QTerm",
                        tr("Setting changed, do you want to save?"),
@@ -248,7 +230,7 @@ void addrDialog::onConnect()
             onApply();
     }
     if (!bPartial)
-        Global::instance()->addrCfg()->save();
+		Global::instance()->saveAddressXml(domModel->document());
     done(1);
 }
 
@@ -342,11 +324,10 @@ void addrDialog::onMenuColor()
 
 void addrDialog::connectSlots()
 {
-    connect(ui.nameListWidget, SIGNAL(currentRowChanged(int)), this, SLOT(onNamechange(int)));
-    connect(ui.nameListWidget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(onConnect()));
+    connect(ui.nameTreeView, SIGNAL(clicked(QModelIndex)), this, SLOT(onNamechange(QModelIndex)));
+    connect(ui.nameTreeView, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(onConnect(QModelIndex)));
+	connect(ui.nameTreeView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onPopupTreeContextMenu(QPoint)));
 
-    connect(ui.addPushButton, SIGNAL(clicked()), this, SLOT(onAdd()));
-    connect(ui.deletePushButton, SIGNAL(clicked()), this, SLOT(onDelete()));
     connect(ui.applyPushButton, SIGNAL(clicked()), this, SLOT(onApply()));
     connect(ui.closePushButton, SIGNAL(clicked()), this, SLOT(onClose()));
     connect(ui.connectPushButton, SIGNAL(clicked()), this, SLOT(onConnect()));
@@ -368,173 +349,175 @@ void addrDialog::connectSlots()
 
 bool addrDialog::isChanged()
 {
-    return(param.m_strName != ui.nameLineEdit->text() ||
-           param.m_strAddr != ui.addrLineEdit->text() ||
-           param.m_uPort != ui.portSpinBox->value() ||
-           param.m_nHostType != ui.hostTypeComboBox->currentIndex() ||
-           param.m_bAutoLogin != ui.autoLoginCheckBox->isChecked() ||
-           param.m_strPreLogin != ui.preloginLineEdit->text() ||
-           param.m_strUser != ui.userLineEdit->text() ||
-           param.m_strPasswd != ui.passwdLineEdit->text() ||
-           param.m_strPostLogin != ui.postloginLineEdit->text() ||
-           param.m_BBSCode != ui.bbscodeComboBox->currentText() ||
-           param.m_nDispCode != ui.displaycodeComboBox->currentIndex() ||
-           param.m_bAutoFont != ui.autofontCheckBox->isChecked() ||
-           param.m_bAlwaysHighlight != ui.highlightCheckBox->isChecked() ||
-           param.m_bAnsiColor != ui.ansicolorCheckBox->isChecked() ||
-           param.m_strASCIIFontName != strASCIIFontName ||
-           param.m_strGeneralFontName != strGeneralFontName||
-           param.m_nFontSize != nFontSize ||
-           param.m_strSchemeFile != strSchemeFile ||
-           param.m_strKeyboardProfile != strKeyboardProfile||
-           param.m_strTerm != ui.termtypeLineEdit->text() ||
-           param.m_nCol != ui.columnSpinBox->value() ||
-           param.m_nRow != ui.rowSpinBox->value() ||
-           param.m_nScrollLines != ui.scrollSpinBox->value() ||
-           param.m_nCursorType != ui.cursorTypeComboBox->currentIndex() ||
-           param.m_strEscape != ui.escapeLineEdit->text() ||
-           param.m_nProxyType != ui.proxytypeComboBox->currentIndex() ||
-           param.m_strProxyHost != ui.proxyaddrLineEdit->text() ||
-           param.m_uProxyPort != ui.proxyportSpinBox->value() ||
-           param.m_bAuth != ui.authCheckBox->isChecked() ||
-           param.m_strProxyUser != ui.proxyuserLineEdit->text() ||
-           param.m_strProxyPasswd != ui.proxypasswdLineEdit->text() ||
-           param.m_nProtocolType != ui.protocolComboBox->currentIndex() ||
-           param.m_nMaxIdle != ui.idletimeLineEdit->text().toInt() ||
-           param.m_strAntiString != ui.antiLineEdit->text() ||
-           param.m_strReplyKey != ui.replykeyLineEdit->text() ||
-           param.m_strAutoReply != ui.replyLineEdit->text()) ||
-          param.m_bAutoReply != ui.replyCheckBox->isChecked() ||
-          param.m_bReconnect != ui.reconnectCheckBox->isChecked() ||
-          param.m_nReconnectInterval != ui.reconnectLineEdit->text().toInt() ||
-//  param.m_nRetry != ui.retryLineEdit->text().toInt() ||
-          param.m_bLoadScript != ui.scriptCheckBox->isChecked() ||
-          param.m_strScriptFile != ui.scriptLineEdit->text() ||
-          param.m_nMenuType != ui.menuTypeComboBox->currentIndex() ||
-          param.m_clrMenu != clrMenu;
+    return(param.m_mapParam["name"].toString() != ui.nameLineEdit->text() ||
+           param.m_mapParam["addr"].toString() != ui.addrLineEdit->text() ||
+                   param.m_mapParam["port"].toInt() != ui.portSpinBox->value() ||
+                   param.m_mapParam["hosttype"].toInt() != ui.hostTypeComboBox->currentIndex() ||
+           param.m_mapParam["autologin"].toBool() != ui.autoLoginCheckBox->isChecked() ||
+           param.m_mapParam["prelogin"].toString() != ui.preloginLineEdit->text() ||
+           param.m_mapParam["user"].toString() != ui.userLineEdit->text() ||
+           param.m_mapParam["password"].toString() != ui.passwdLineEdit->text() ||
+           param.m_mapParam["postlogin"].toString() != ui.postloginLineEdit->text() ||
+           param.m_mapParam["bbscode"].toString() != ui.bbscodeComboBox->currentText() ||
+           param.m_mapParam["displaycode"].toInt() != ui.displaycodeComboBox->currentIndex() ||
+           param.m_mapParam["autofont"].toBool() != ui.autofontCheckBox->isChecked() ||
+           param.m_mapParam["alwayshighlight"].toBool() != ui.highlightCheckBox->isChecked() ||
+           param.m_mapParam["ansicolor"].toBool() != ui.ansicolorCheckBox->isChecked() ||
+           param.m_mapParam["asciifont"].toString() != strASCIIFontName ||
+           param.m_mapParam["generalfont"].toString() != strGeneralFontName||
+           param.m_mapParam["fontsize"].toInt() != nFontSize ||
+           param.m_mapParam["schemefile"].toString() != strSchemeFile ||
+           param.m_mapParam["keyboardprofile"].toString() != strKeyboardProfile||
+           param.m_mapParam["termtype"].toString() != ui.termtypeLineEdit->text() ||
+           param.m_mapParam["column"].toInt() != ui.columnSpinBox->value() ||
+           param.m_mapParam["row"].toInt() != ui.rowSpinBox->value() ||
+           param.m_mapParam["scroll"].toInt() != ui.scrollSpinBox->value() ||
+           param.m_mapParam["cursor"].toInt() != ui.cursorTypeComboBox->currentIndex() ||
+           param.m_mapParam["escape"].toString() != ui.escapeLineEdit->text() ||
+           param.m_mapParam["proxytype"].toInt() != ui.proxytypeComboBox->currentIndex() ||
+           param.m_mapParam["proxyaddr"].toString() != ui.proxyaddrLineEdit->text() ||
+           param.m_mapParam["proxyport"].toInt() != ui.proxyportSpinBox->value() ||
+           param.m_mapParam["proxyauth"].toBool() != ui.authCheckBox->isChecked() ||
+           param.m_mapParam["proxyuser"].toString() != ui.proxyuserLineEdit->text() ||
+           param.m_mapParam["proxypassword"].toString() != ui.proxypasswdLineEdit->text() ||
+           param.m_mapParam["protocol"].toInt() != ui.protocolComboBox->currentIndex() ||
+           param.m_mapParam["maxidle"].toInt() != ui.idletimeLineEdit->text().toInt() ||
+           param.m_mapParam["antiidlestring"].toString() != ui.antiLineEdit->text() ||
+           param.m_mapParam["replykey"].toString() != ui.replykeyLineEdit->text() ||
+           param.m_mapParam["autoreply"].toString() != ui.replyLineEdit->text() ||
+           param.m_mapParam["bautoreply"].toBool() != ui.replyCheckBox->isChecked() ||
+           param.m_mapParam["reconnect"].toBool() != ui.reconnectCheckBox->isChecked() ||
+           param.m_mapParam["interval"].toInt() != ui.reconnectLineEdit->text().toInt() ||
+//  param.m_mapParam["retrytimes"].toInt() != ui.retryLineEdit->text().toInt() ||
+           param.m_mapParam["loadscript"].toBool() != ui.scriptCheckBox->isChecked() ||
+           param.m_mapParam["scriptfile"].toString() != ui.scriptLineEdit->text() ||
+           param.m_mapParam["menutype"].toInt() != ui.menuTypeComboBox->currentIndex() ||
+           param.m_mapParam["menucolor"] != clrMenu);
 
 }
 
 void addrDialog::updateData(bool save)
 {
     if (save) { // from display to param
-        param.m_strName = ui.nameLineEdit->text();
-        param.m_strAddr = ui.addrLineEdit->text();
-        param.m_uPort = ui.portSpinBox->value();
-        param.m_nHostType = ui.hostTypeComboBox->currentIndex();
-        param.m_bAutoLogin = ui.autoLoginCheckBox->isChecked();
-        param.m_strPreLogin = ui.preloginLineEdit->text();
-        param.m_strUser = ui.userLineEdit->text();
-        param.m_strPasswd = ui.passwdLineEdit->text();
-        param.m_strPostLogin = ui.postloginLineEdit->text();
-        param.m_BBSCode = ui.bbscodeComboBox->currentText();
-        param.m_nDispCode = ui.displaycodeComboBox->currentIndex();
-        param.m_bAutoFont = ui.autofontCheckBox->isChecked();
-        param.m_bAlwaysHighlight = ui.highlightCheckBox->isChecked();
-        param.m_bAnsiColor = ui.ansicolorCheckBox->isChecked();
-        param.m_strASCIIFontName = strASCIIFontName;
-        param.m_strGeneralFontName = strGeneralFontName;
-        param.m_nFontSize = nFontSize;
-        param.m_strSchemeFile = strSchemeFile;
-        param.m_strKeyboardProfile = strKeyboardProfile;
-        param.m_strTerm = ui.termtypeLineEdit->text();
-        param.m_nCol = ui.columnSpinBox->value();
-        param.m_nRow = ui.rowSpinBox->value();
-        param.m_nScrollLines = ui.scrollSpinBox->value();
-        param.m_nCursorType = ui.cursorTypeComboBox->currentIndex();
-        param.m_strEscape = ui.escapeLineEdit->text();
-        param.m_nProxyType = ui.proxytypeComboBox->currentIndex();
-        param.m_strProxyHost = ui.proxyaddrLineEdit->text();
-        param.m_uProxyPort = ui.proxyportSpinBox->value();
-        param.m_bAuth = ui.authCheckBox->isChecked();
-        param.m_strProxyUser = ui.proxyuserLineEdit->text();
-        param.m_strProxyPasswd = ui.proxypasswdLineEdit->text();
-        param.m_nProtocolType = ui.protocolComboBox->currentIndex();
-        param.m_nMaxIdle = ui.idletimeLineEdit->text().toInt();
-        param.m_strReplyKey = ui.replykeyLineEdit->text();
-        if (param.m_strReplyKey.isNull())
+        param.m_mapParam["name"] = ui.nameLineEdit->text();
+        param.m_mapParam["addr"] = ui.addrLineEdit->text();
+        param.m_mapParam["port"] = ui.portSpinBox->value();
+        param.m_mapParam["hosttype"] = ui.hostTypeComboBox->currentIndex();
+        param.m_mapParam["autologin"] = ui.autoLoginCheckBox->isChecked();
+        param.m_mapParam["prelogin"] = ui.preloginLineEdit->text();
+        param.m_mapParam["user"] = ui.userLineEdit->text();
+        param.m_mapParam["password"] = ui.passwdLineEdit->text();
+        param.m_mapParam["postlogin"] = ui.postloginLineEdit->text();
+        param.m_mapParam["bbscode"] = ui.bbscodeComboBox->currentText();
+        param.m_mapParam["displaycode"] = ui.displaycodeComboBox->currentIndex();
+        param.m_mapParam["autofont"] = ui.autofontCheckBox->isChecked();
+        param.m_mapParam["alwayshighlight"] = ui.highlightCheckBox->isChecked();
+        param.m_mapParam["ansicolor"] = ui.ansicolorCheckBox->isChecked();
+        param.m_mapParam["asciifont"] = strASCIIFontName;
+        param.m_mapParam["generalfont"] = strGeneralFontName;
+        param.m_mapParam["fontsize"] = nFontSize;
+        param.m_mapParam["schemefile"] = strSchemeFile;
+        param.m_mapParam["opacity"] = ui.opacityHorizontalSlider->value();
+        param.m_mapParam["blinkcursor"] = ui.blinkCursorCheckBox->isChecked();
+        param.m_mapParam["keyboardprofile"] = strKeyboardProfile;
+        param.m_mapParam["termtype"] = ui.termtypeLineEdit->text();
+        param.m_mapParam["column"] = ui.columnSpinBox->value();
+        param.m_mapParam["row"] = ui.rowSpinBox->value();
+        param.m_mapParam["scroll"] = ui.scrollSpinBox->value();
+        param.m_mapParam["cursor"] = ui.cursorTypeComboBox->currentIndex();
+        param.m_mapParam["escape"] = ui.escapeLineEdit->text();
+        param.m_mapParam["proxytype"] = ui.proxytypeComboBox->currentIndex();
+        param.m_mapParam["proxyhost"] = ui.proxyaddrLineEdit->text();
+        param.m_mapParam["proxyport"] = ui.proxyportSpinBox->value();
+        param.m_mapParam["proxyauth"] = ui.authCheckBox->isChecked();
+        param.m_mapParam["proxyuser"] = ui.proxyuserLineEdit->text();
+        param.m_mapParam["proxypassword"] = ui.proxypasswdLineEdit->text();
+        param.m_mapParam["protocol"] = ui.protocolComboBox->currentIndex();
+        param.m_mapParam["maxidle"] = ui.idletimeLineEdit->text().toInt();
+        param.m_mapParam["replykey"] = ui.replykeyLineEdit->text();
+		if (param.m_mapParam["replykey"].toString().isNull())
             qDebug("saving null");
-        param.m_strAntiString = ui.antiLineEdit->text();
-        param.m_bAutoReply = ui.replyCheckBox->isChecked();
-        param.m_strAutoReply = ui.replyLineEdit->text();
-        param.m_bReconnect = ui.reconnectCheckBox->isChecked();
-        param.m_nReconnectInterval = ui.reconnectLineEdit->text().toInt();
-//  param.m_nRetry = ui.retryLineEdit->text().toInt();
-        param.m_bLoadScript = ui.scriptCheckBox->isChecked();
-        param.m_strScriptFile = ui.scriptLineEdit->text();
-        param.m_nMenuType = ui.menuTypeComboBox->currentIndex();
-        param.m_clrMenu = clrMenu;
+        param.m_mapParam["antiidlestring"] = ui.antiLineEdit->text();
+        param.m_mapParam["bautoreply"] = ui.replyCheckBox->isChecked();
+        param.m_mapParam["autoreply"] = ui.replyLineEdit->text();
+        param.m_mapParam["reconnect"] = ui.reconnectCheckBox->isChecked();
+        param.m_mapParam["interval"] = ui.reconnectLineEdit->text().toInt();
+//  param.m_mapParam["retrytimes"] = ui.retryLineEdit->text().toInt();
+        param.m_mapParam["loadscript"] = ui.scriptCheckBox->isChecked();
+        param.m_mapParam["scriptfile"] = ui.scriptLineEdit->text();
+        param.m_mapParam["menutype"] = ui.menuTypeComboBox->currentIndex();
+        param.m_mapParam["menucolor"] = clrMenu;
     } else { // from param to display
         disconnect(ui.protocolComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocol(int)));
         QString strTmp;
-        ui.nameLineEdit->setText(param.m_strName);
-        ui.addrLineEdit->setText(param.m_strAddr);
-        strTmp.setNum(param.m_uPort);
-        ui.portSpinBox->setValue(strTmp.toUInt());
-        ui.hostTypeComboBox->setCurrentIndex(param.m_nHostType);
-        ui.autoLoginCheckBox->setChecked(param.m_bAutoLogin);
-        ui.preloginLineEdit->setEnabled(param.m_bAutoLogin);
-        ui.userLineEdit->setEnabled(param.m_bAutoLogin);
-        ui.passwdLineEdit->setEnabled(param.m_bAutoLogin);
-        ui.postloginLineEdit->setEnabled(param.m_bAutoLogin);
-        ui.preloginLineEdit->setText(param.m_strPreLogin);
-        ui.userLineEdit->setText(param.m_strUser);
-        ui.passwdLineEdit->setText(param.m_strPasswd);
-        ui.postloginLineEdit->setText(param.m_strPostLogin);
-        ui.bbscodeComboBox->setCurrentIndex(ui.bbscodeComboBox->findText(param.m_BBSCode));
-        ui.displaycodeComboBox->setCurrentIndex(param.m_nDispCode);
-        ui.autofontCheckBox->setChecked(param.m_bAutoFont);
-        ui.highlightCheckBox->setChecked(param.m_bAlwaysHighlight);
-        ui.ansicolorCheckBox->setChecked(param.m_bAnsiColor);
-        strASCIIFontName = param.m_strASCIIFontName;
+        ui.nameLineEdit->setText(param.m_mapParam["name"].toString());
+        ui.addrLineEdit->setText(param.m_mapParam["addr"].toString());
+        ui.portSpinBox->setValue(param.m_mapParam["port"].toInt());
+        ui.hostTypeComboBox->setCurrentIndex(param.m_mapParam["hosttype"].toInt());
+        ui.autoLoginCheckBox->setChecked(param.m_mapParam["autologin"].toBool());
+        ui.preloginLineEdit->setEnabled(param.m_mapParam["autologin"].toBool());
+        ui.userLineEdit->setEnabled(param.m_mapParam["autologin"].toBool());
+        ui.passwdLineEdit->setEnabled(param.m_mapParam["autologin"].toBool());
+        ui.postloginLineEdit->setEnabled(param.m_mapParam["autologin"].toBool());
+        ui.preloginLineEdit->setText(param.m_mapParam["prelogin"].toString());
+        ui.userLineEdit->setText(param.m_mapParam["user"].toString());
+        ui.passwdLineEdit->setText(param.m_mapParam["password"].toString());
+        ui.postloginLineEdit->setText(param.m_mapParam["postlogin"].toString());
+        ui.bbscodeComboBox->setCurrentIndex(ui.bbscodeComboBox->findText(param.m_mapParam["bbscode"].toString()));
+        ui.displaycodeComboBox->setCurrentIndex(param.m_mapParam["displaycode"].toInt());
+        ui.autofontCheckBox->setChecked(param.m_mapParam["autofont"].toBool());
+        ui.highlightCheckBox->setChecked(param.m_mapParam["alwayshighlight"].toBool());
+        ui.ansicolorCheckBox->setChecked(param.m_mapParam["ansicolor"].toBool());
+        // We take whatever the matched font name
+        strASCIIFontName = param.m_mapParam["asciifont"].toString();
         ui.asciiFontComboBox->setCurrentFont(QFont(strASCIIFontName));
-        strGeneralFontName = param.m_strGeneralFontName;
+        param.m_mapParam["asciifont"] = strASCIIFontName;
+        strGeneralFontName = param.m_mapParam["generalfont"].toString();
         ui.generalFontComboBox->setCurrentFont(QFont(strGeneralFontName));
-        nFontSize = param.m_nFontSize ;
+        param.m_mapParam["generalfont"] = strGeneralFontName;
+        nFontSize = param.m_mapParam["fontsize"].toInt();
         ui.fontSizeSpinBox->setValue(nFontSize);
-        strSchemeFile = param.m_strSchemeFile;
+        strSchemeFile = param.m_mapParam["schemefile"].toString();
         ui.schemeComboBox->setCurrentIndex(schemeFileList.indexOf(strSchemeFile));
-        strKeyboardProfile = param.m_strKeyboardProfile;
+        ui.opacityHorizontalSlider->setValue(param.m_mapParam["opacity"].toInt());
+        ui.blinkCursorCheckBox->setChecked(param.m_mapParam["blinkcursor"].toBool());
+        strKeyboardProfile = param.m_mapParam["keyboardprofile"].toString();
         ui.keytypeComboBox->setCurrentIndex(keyboardProfileList.indexOf(strKeyboardProfile));
-        ui.termtypeLineEdit->setText(param.m_strTerm);
-        ui.columnSpinBox->setValue(param.m_nCol);
-        ui.rowSpinBox->setValue(param.m_nRow);
-        ui.scrollSpinBox->setValue(param.m_nScrollLines);
-        ui.cursorTypeComboBox->setCurrentIndex(param.m_nCursorType);
-        ui.escapeLineEdit->setText(param.m_strEscape);
-        ui.proxytypeComboBox->setCurrentIndex(param.m_nProxyType);
-        ui.proxyaddrLineEdit->setText(param.m_strProxyHost);
-        strTmp.setNum(param.m_uProxyPort);
-        ui.proxyportSpinBox->setValue(strTmp.toUInt());
-        ui.authCheckBox->setChecked(param.m_bAuth);
-        ui.proxyuserLineEdit->setEnabled(param.m_bAuth);
-        ui.proxypasswdLineEdit->setEnabled(param.m_bAuth);
-        ui.proxyuserLineEdit->setText(param.m_strProxyUser);
-        ui.proxypasswdLineEdit->setText(param.m_strProxyPasswd);
-        ui.protocolComboBox->setCurrentIndex(param.m_nProtocolType);
-        strTmp.setNum(param.m_nMaxIdle);
-        ui.idletimeLineEdit->setText(strTmp);
-        ui.replykeyLineEdit->setText(param.m_strReplyKey);
-        ui.antiLineEdit->setText(param.m_strAntiString);
-        ui.replyCheckBox->setChecked(param.m_bAutoReply);
-        ui.replyLineEdit->setEnabled(param.m_bAutoReply);
-        ui.replyLineEdit->setText(param.m_strAutoReply);
-        ui.reconnectCheckBox->setChecked(param.m_bReconnect);
-        ui.reconnectLineEdit->setEnabled(param.m_bReconnect);
-//  ui.retryLineEdit->setEnabled(param.m_bReconnect);
-        strTmp.setNum(param.m_nReconnectInterval);
-        ui.reconnectLineEdit->setText(strTmp);
-        strTmp.setNum(param.m_nRetry);
-//  ui.retryLineEdit->setText(strTmp);
-        ui.scriptCheckBox->setChecked(param.m_bLoadScript);
-        ui.scriptLineEdit->setEnabled(param.m_bLoadScript);
-        ui.scriptPushButton->setEnabled(param.m_bLoadScript);
-        ui.scriptLineEdit->setText(param.m_strScriptFile);
-        ui.menuTypeComboBox->setCurrentIndex(param.m_nMenuType);
+        ui.termtypeLineEdit->setText(param.m_mapParam["termtype"].toString());
+        ui.columnSpinBox->setValue(param.m_mapParam["column"].toInt());
+        ui.rowSpinBox->setValue(param.m_mapParam["row"].toInt());
+        ui.scrollSpinBox->setValue(param.m_mapParam["scroll"].toInt());
+        ui.cursorTypeComboBox->setCurrentIndex(param.m_mapParam["cursor"].toInt());
+        ui.escapeLineEdit->setText(param.m_mapParam["escape"].toString());
+        ui.proxytypeComboBox->setCurrentIndex(param.m_mapParam["proxytype"].toInt());
+        ui.proxyaddrLineEdit->setText(param.m_mapParam["proxyaddr"].toString());
+        ui.proxyportSpinBox->setValue(param.m_mapParam["proxyport"].toInt());
+        ui.authCheckBox->setChecked(param.m_mapParam["proxyauth"].toBool());
+        ui.proxyuserLineEdit->setEnabled(param.m_mapParam["proxyauth"].toBool());
+        ui.proxypasswdLineEdit->setEnabled(param.m_mapParam["proxyauth"].toBool());
+        ui.proxyuserLineEdit->setText(param.m_mapParam["proxyuser"].toString());
+        ui.proxypasswdLineEdit->setText(param.m_mapParam["proxypassword"].toString());
+        ui.protocolComboBox->setCurrentIndex(param.m_mapParam["protocol"].toInt());
+        ui.idletimeLineEdit->setText(param.m_mapParam["maxidle"].toString());
+        ui.replykeyLineEdit->setText(param.m_mapParam["replykey"].toString());
+        ui.antiLineEdit->setText(param.m_mapParam["antiidlestring"].toString());
+        ui.replyCheckBox->setChecked(param.m_mapParam["bautoreply"].toBool());
+        ui.replyLineEdit->setEnabled(param.m_mapParam["bautoreply"].toBool());
+        ui.replyLineEdit->setText(param.m_mapParam["autoreply"].toString());
+        ui.reconnectCheckBox->setChecked(param.m_mapParam["reconnect"].toBool());
+        ui.reconnectLineEdit->setEnabled(param.m_mapParam["reconnect"].toBool());
+//  ui.retryLineEdit->setEnabled(param.m_mapParam["reconnect"].toBool());
+        ui.reconnectLineEdit->setText(param.m_mapParam["interval"].toString());
+//  ui.retryLineEdit->setText(param.m_mapParam["retrytimes"].toString());
+        ui.scriptCheckBox->setChecked(param.m_mapParam["loadscript"].toBool());
+        ui.scriptLineEdit->setEnabled(param.m_mapParam["loadscript"].toBool());
+        ui.scriptPushButton->setEnabled(param.m_mapParam["loadscript"].toBool());
+        ui.scriptLineEdit->setText(param.m_mapParam["scriptfile"].toString());
+        ui.menuTypeComboBox->setCurrentIndex(param.m_mapParam["menutype"].toInt());
         //ui.menuGroup->setButton(param.m_nMenuType);
         //QRadioButton * rbMenu = qobject_cast<QRadioButton*>(bgMenu.button(param.m_nMenuType));
         //rbMenu->setChecked(true);
-        clrMenu = param.m_clrMenu;
+        clrMenu = param.m_mapParam["menucolor"].toString();
         connect(ui.protocolComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocol(int)));
     }
 }

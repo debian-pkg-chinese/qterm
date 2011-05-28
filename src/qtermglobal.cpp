@@ -29,13 +29,16 @@
 #include <QtGui/QDesktopServices>
 #include <QtGui/QFileDialog>
 #include <QtGui/QMessageBox>
+#include <QtXml/QDomDocument>
+#include <QtCore/QUuid>
+#include <QtCore/QTextStream>
 
 #if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
+#include <windows.h>
+#include <shellapi.h>
 #ifndef MAX_PATH
 #define MAX_PATH 128
 #endif
-#include <windows.h>
-#include <shellapi.h>
 #endif
 
 namespace QTerm
@@ -59,15 +62,11 @@ Global * Global::instance()
 }
 
 Global::Global()
-        : m_fileCfg("./qterm.cfg"), m_addrCfg("./address.cfg"), m_pathLib("./"), m_pathPic("./"), m_pathCfg("./"), m_windowState(), m_status(INIT_OK), m_style(), m_fullScreen(false), m_language(Global::English), m_showToolBar()
+        : m_fileCfg("./qterm.cfg"), m_addrCfg("./address.cfg"), m_addrXml("./address.xml"),
+        m_pathLib("./"), m_pathCfg("./"), 
+        m_windowState(), m_status(INIT_OK), m_style(), 
+        m_fullScreen(false), m_language(Global::English)
 {
-    if (!iniWorkingDir(qApp->arguments()[0])) {
-        m_status = INIT_ERROR;
-        return;
-    }
-    m_config = new Config(m_fileCfg);
-    m_address = new Config(m_addrCfg);
-    m_converter = new Convert();
 #ifdef KWALLET_ENABLED
     if (Wallet::isWalletAvailable()) {
         qDebug() << "KWallet service found";
@@ -76,6 +75,15 @@ Global::Global()
         m_wallet = NULL;
     }
 #endif // KWALLET_ENABLED
+    if (!iniWorkingDir(qApp->arguments()[0])) {
+        m_status = INIT_ERROR;
+        return;
+    }
+    m_translatorQT    = new QTranslator(0);
+    m_translatorQTerm = new QTranslator(0);
+    
+    m_config    = new Config(m_fileCfg);
+    m_converter = new Convert();
     if (!iniSettings()) {
         m_status = INIT_ERROR;
         return;
@@ -95,19 +103,20 @@ Config * Global::fileCfg()
     return m_config;
 }
 
-Config * Global::addrCfg()
+QDomDocument Global::addrXml()
 {
-    return m_address;
+    QDomDocument doc;
+    QFile file(m_addrXml);
+    if (file.open(QIODevice::ReadOnly)) {
+        doc.setContent(&file);
+        file.close();
+    }
+    return doc;
 }
 
 const QString & Global::pathLib()
 {
     return m_pathLib;
-}
-
-const QString & Global::pathPic()
-{
-    return m_pathPic;
 }
 
 const QString & Global::pathCfg()
@@ -127,26 +136,46 @@ void Global::clearDir(const QString & path)
     }
 }
 
-QStringList Global::loadNameList()
+QMap<QString,QString> Global::loadFavoriteList(QDomDocument doc)
 {
-    QStringList listName;
-
-    QString strTmp = m_address->getItemValue("bbs list", "num").toString();
-
-    QString strSection;
-
-    for (int i = 0; i < strTmp.toInt(); i++) {
-        strSection.sprintf("bbs %d", i);
-        listName.append(m_address->getItemValue(strSection, "name").toString());
+    QMap<QString,QString> listSite;
+    // import xml address book
+    QDomNodeList nodeList = doc.elementsByTagName("site");
+    for (int i=0; i<nodeList.count(); i++) {
+        QDomElement node = nodeList.at(i).toElement();
+        if (node.attribute("favor") == "1")
+            listSite[node.attribute("uuid")] = node.attribute("name");
     }
 
-    return listName;
+    return listSite;
 }
 
-bool Global::loadAddress(int n, Param& param)
+bool Global::loadAddress(QDomDocument doc, QString uuid, Param& param)
+{
+    if (uuid.isEmpty())
+        uuid = QUuid().toString();
+    QDomNodeList nodeList = doc.elementsByTagName("site");
+    for (int i=0; i<nodeList.count(); i++) {
+        QDomElement node = nodeList.at(i).toElement();
+        if (uuid == node.attribute("uuid"))
+            foreach (QString key, param.m_mapParam.keys())  {
+                #ifdef KWALLET_ENABLED
+                if (key == "password" && m_wallet != NULL) {
+                    m_wallet->open();
+                    param.m_mapParam["password"] = m_wallet->readPassword(
+                        node.attribute("name"), node.attribute("user"));
+                } else
+                #endif // KWALLET_ENABLED
+                param.m_mapParam[key] = node.attribute(key);
+            }
+    }
+    return true;
+}
+
+bool Global::loadAddress(Config& addrCfg, int n, Param& param)
 {
     QString strTmp, strSection;
-    strTmp = m_address->getItemValue("bbs list", "num").toString();
+    strTmp = addrCfg.getItemValue("bbs list", "num").toString();
     if ((n < 0 && strTmp.toInt() <= 0) || n < -1)
         strSection = "default";
     else {
@@ -155,244 +184,166 @@ bool Global::loadAddress(int n, Param& param)
     }
 
     // check if larger than existence
-    strTmp = m_address->getItemValue("bbs list", "num").toString();
+    strTmp = addrCfg.getItemValue("bbs list", "num").toString();
     if (n >= strTmp.toInt())
         return false;
-    param.m_strName = m_address->getItemValue(strSection, "name").toString();
-    param.m_strAddr = m_address->getItemValue(strSection, "addr").toString();
-    strTmp = m_address->getItemValue(strSection, "port").toString();
-    param.m_uPort = strTmp.toUShort();
-    strTmp = m_address->getItemValue(strSection, "hosttype").toString();
-    param.m_nHostType = strTmp.toInt();
-    strTmp = m_address->getItemValue(strSection, "autologin").toString();
-    param.m_bAutoLogin = (strTmp != "0");
-    param.m_strPreLogin = m_address->getItemValue(strSection, "prelogin").toString();
-    param.m_strUser = m_address->getItemValue(strSection, "user").toString();
-#ifdef KWALLET_ENABLED
-    if (m_wallet != NULL) {
-        m_wallet->open();
-        param.m_strPasswd = m_wallet->readPassword(param.m_strName, param.m_strUser);
-    } else
-#endif // KWALLET_ENABLED
-        param.m_strPasswd = m_address->getItemValue(strSection, "password").toString();
-    param.m_strPostLogin = m_address->getItemValue(strSection, "postlogin").toString();
 
-    strTmp = m_address->getItemValue(strSection, "bbscode").toString();
-    param.m_BBSCode = strTmp;
-    strTmp = m_address->getItemValue(strSection, "displaycode").toString();
-    param.m_nDispCode = strTmp.toInt();
-    strTmp = m_address->getItemValue(strSection, "autofont").toString();
-    param.m_bAutoFont = (strTmp != "0");
-    strTmp = m_address->getItemValue(strSection, "alwayshighlight").toString();
-    param.m_bAlwaysHighlight = (strTmp != "0");
-    strTmp = m_address->getItemValue(strSection, "ansicolor").toString();
-    param.m_bAnsiColor = (strTmp != "0");
-    param.m_strASCIIFontName = m_address->getItemValue(strSection, "asciifont").toString();
-    param.m_strGeneralFontName = m_address->getItemValue(strSection, "generalfont").toString();
-    strTmp = m_address->getItemValue(strSection, "fontsize").toString();
-    param.m_nFontSize = strTmp.toInt();
-    param.m_strSchemeFile = m_address->getItemValue(strSection, "schemefile").toString();
-    param.m_strKeyboardProfile = m_address->getItemValue(strSection, "keyboardprofile").toString();
-
-    param.m_strTerm = m_address->getItemValue(strSection, "termtype").toString();
-    strTmp =  m_address->getItemValue(strSection, "column").toString();
-    param.m_nCol = strTmp.toInt();
-    strTmp =  m_address->getItemValue(strSection, "row").toString();
-    param.m_nRow = strTmp.toInt();
-    strTmp =  m_address->getItemValue(strSection, "scroll").toString();
-    param.m_nScrollLines = strTmp.toInt();
-    strTmp =  m_address->getItemValue(strSection, "cursor").toString();
-    param.m_nCursorType = strTmp.toInt();
-    param.m_strEscape = m_address->getItemValue(strSection, "escape").toString();
-
-    strTmp =  m_address->getItemValue(strSection, "proxytype").toString();
-    param.m_nProxyType = strTmp.toInt();
-    strTmp = m_address->getItemValue(strSection, "proxyauth").toString();
-    param.m_bAuth = (strTmp != "0");
-    param.m_strProxyHost = m_address->getItemValue(strSection, "proxyaddr").toString();
-    strTmp = m_address->getItemValue(strSection, "proxyport").toString();
-    param.m_uProxyPort = strTmp.toInt();
-    param.m_strProxyUser = m_address->getItemValue(strSection, "proxyuser").toString();
-    param.m_strProxyPasswd = m_address->getItemValue(strSection, "proxypassword").toString();
-    strTmp = m_address->getItemValue(strSection, "protocol").toString();
-    param.m_nProtocolType = strTmp.toInt();
-
-    strTmp = m_address->getItemValue(strSection, "maxidle").toString();
-    param.m_nMaxIdle = strTmp.toInt();
-    param.m_strReplyKey = m_address->getItemValue(strSection, "replykey").toString();
-    if (param.m_strReplyKey.isNull())
-        qDebug("loading null\n");
-
-    param.m_strAntiString = m_address->getItemValue(strSection, "antiidlestring").toString();
-    param.m_strAutoReply = m_address->getItemValue(strSection, "autoreply").toString();
-    strTmp = m_address->getItemValue(strSection, "bautoreply").toString();
-    param.m_bAutoReply = (strTmp != "0");
-
-    strTmp = m_address->getItemValue(strSection, "reconnect").toString();
-    param.m_bReconnect = (strTmp != "0");
-    strTmp = m_address->getItemValue(strSection, "interval").toString();
-    param.m_nReconnectInterval = strTmp.toInt();
-    strTmp = m_address->getItemValue(strSection, "retrytimes").toString();
-    param.m_nRetry = strTmp.toInt();
-
-    strTmp = m_address->getItemValue(strSection, "loadscript").toString();
-    param.m_bLoadScript = (strTmp != "0");
-    param.m_strScriptFile = m_address->getItemValue(strSection, "scriptfile").toString();
-    if (param.m_strScriptFile.isEmpty()) {
-        param.m_bLoadScript = false;
+    foreach(QString key,param.m_mapParam.keys()) {
+        #ifdef KWALLET_ENABLED
+        if (key == "password" && m_wallet != NULL) {
+            m_wallet->open();
+            param.m_mapParam["password"] = m_wallet->readPassword(
+                param.m_mapParam["name"].toString(),
+                param.m_mapParam["user"].toString());
+        } else
+        #endif // KWALLET_ENABLED
+            param.m_mapParam[key] = addrCfg.getItemValue(strSection,key);
     }
-
-    strTmp = m_address->getItemValue(strSection, "menutype").toString();
-    param.m_nMenuType = strTmp.toInt();
-    param.m_clrMenu.setNamedColor(m_address->getItemValue(strSection, "menucolor").toString());
 
     return true;
 }
 
-void Global::saveAddress(int n, const Param& param)
+void Global::saveAddress(QDomDocument doc, QString uuid, const Param& param)
 {
-    QString strTmp, strSection;
-    if (n < 0)
-        strSection = "default";
-    else
-        strSection.sprintf("bbs %d", n);
+    bool result = false;
+    // find and replace existing site
+    QDomNodeList nodeList = doc.elementsByTagName("site");
+    for (int i=0; i<nodeList.count(); i++) {
+        QDomElement node = nodeList.at(i).toElement();
+        if (uuid == node.attribute("uuid")) {
+            foreach (QString key, param.m_mapParam.keys()) 
+                node.setAttribute(key, 
+                    param.m_mapParam[key].toString());
+            result = true;
+            break;
+        }
+    }
+    // create new site otherwise
+    if (!result) {
+        QDomElement site = doc.createElement("site");
+        site.setAttribute("uuid", uuid);
+        foreach (QString key, param.m_mapParam.keys()) 
+                site.setAttribute(key, 
+                    param.m_mapParam[key].toString());
+        doc.documentElement().appendChild(site);
+        result = true;
+    }
 
-    m_address->setItemValue(strSection, "name", param.m_strName);
-    m_address->setItemValue(strSection, "addr", param.m_strAddr);
-    strTmp.setNum(param.m_uPort);
-    m_address->setItemValue(strSection, "port", strTmp);
-    strTmp.setNum(param.m_nHostType);
-    m_address->setItemValue(strSection, "hosttype", strTmp);
-    m_address->setItemValue(strSection, "autologin", param.m_bAutoLogin ? "1" : "0");
-    m_address->setItemValue(strSection, "prelogin", param.m_strPreLogin);
-    m_address->setItemValue(strSection, "user", param.m_strUser);
-
-#ifdef KWALLET_ENABLED
-    if (m_wallet != NULL) {
-        m_wallet->open();
-        m_wallet->writePassword(param.m_strName, param.m_strUser, param.m_strPasswd);
-    } else
-#endif // KWALLET_ENABLED
-        m_address->setItemValue(strSection, "password", param.m_strPasswd);
-    m_address->setItemValue(strSection, "postlogin", param.m_strPostLogin);
-
-    strTmp=param.m_BBSCode;
-    m_address->setItemValue(strSection, "bbscode", strTmp);
-    strTmp.setNum(param.m_nDispCode);
-    m_address->setItemValue(strSection, "displaycode", strTmp);
-    m_address->setItemValue(strSection, "autofont", param.m_bAutoFont ? "1" : "0");
-    m_address->setItemValue(strSection, "alwayshighlight", param.m_bAlwaysHighlight ? "1" : "0");
-    m_address->setItemValue(strSection, "ansicolor", param.m_bAnsiColor ? "1" : "0");
-    m_address->setItemValue(strSection, "asciifont", param.m_strASCIIFontName);
-    m_address->setItemValue(strSection, "generalfont", param.m_strGeneralFontName);
-    strTmp.setNum(param.m_nFontSize);
-    m_address->setItemValue(strSection, "fontsize", strTmp);
-    m_address->setItemValue(strSection, "schemefile", param.m_strSchemeFile);
-    m_address->setItemValue(strSection, "keyboardprofile", param.m_strKeyboardProfile);
-
-    m_address->setItemValue(strSection, "termtype", param.m_strTerm);
-    strTmp.setNum(param.m_nCol);
-    m_address->setItemValue(strSection, "column", strTmp);
-    strTmp.setNum(param.m_nRow);
-    m_address->setItemValue(strSection, "row", strTmp);
-    strTmp.setNum(param.m_nScrollLines);
-    m_address->setItemValue(strSection, "scroll", strTmp);
-    strTmp.setNum(param.m_nCursorType);
-    m_address->setItemValue(strSection, "cursor", strTmp);
-    m_address->setItemValue(strSection, "escape", param.m_strEscape);
-
-    strTmp.setNum(param.m_nProxyType);
-    m_address->setItemValue(strSection, "proxytype", strTmp);
-    m_address->setItemValue(strSection, "proxyauth", param.m_bAuth ? "1" : "0");
-    m_address->setItemValue(strSection, "proxyaddr", param.m_strProxyHost);
-    strTmp.setNum(param.m_uProxyPort);
-    m_address->setItemValue(strSection, "proxyport", strTmp);
-    m_address->setItemValue(strSection, "proxyuser", param.m_strProxyUser);
-    m_address->setItemValue(strSection, "proxypassword", param.m_strProxyPasswd);
-    strTmp.setNum(param.m_nProtocolType);
-    m_address->setItemValue(strSection, "protocol", strTmp);
-
-    strTmp.setNum(param.m_nMaxIdle);
-    m_address->setItemValue(strSection, "maxidle", strTmp);
-    m_address->setItemValue(strSection, "replykey", param.m_strReplyKey);
-    m_address->setItemValue(strSection, "antiidlestring", param.m_strAntiString);
-    m_address->setItemValue(strSection, "bautoreply", param.m_bAutoReply ? "1" : "0");
-    m_address->setItemValue(strSection, "autoreply", param.m_strAutoReply);
-    m_address->setItemValue(strSection, "reconnect", param.m_bReconnect ? "1" : "0");
-    strTmp.setNum(param.m_nReconnectInterval);
-    m_address->setItemValue(strSection, "interval", strTmp);
-    strTmp.setNum(param.m_nRetry);
-    m_address->setItemValue(strSection, "retrytimes", strTmp);
-
-    m_address->setItemValue(strSection, "loadscript", param.m_bLoadScript ? "1" : "0");
-    m_address->setItemValue(strSection, "scriptfile", param.m_strScriptFile);
-
-    strTmp.setNum(param.m_nMenuType);
-    m_address->setItemValue(strSection, "menutype", strTmp);
-    m_address->setItemValue(strSection, "menucolor", param.m_clrMenu.name());
-    m_address->save();
+    if (!result) return;
 
 }
 
-void Global::removeAddress(int n)
+void Global::removeAddress(QDomDocument doc, QString uuid)
 {
-    if (n < 0)
-        return;
-    QString strSection = QString("bbs %1").arg(n);
-#ifdef KWALLET_ENABLED
-    // check if larger than existence
-    QString strTmp = m_address->getItemValue("bbs list", "num").toString();
-    if (n >= strTmp.toInt())
-        return;
-    QString site = m_address->getItemValue(strSection, "name").toString();
-    QString username = m_address->getItemValue(strSection, "user").toString();
-    if (m_wallet != NULL) {
-        m_wallet->open();
-        m_wallet->removePassword(site, username);
+    QDomNodeList nodeList;
+    // remove the actual site
+    nodeList = doc.elementsByTagName("site");
+    for (int i=0; i<nodeList.count(); i++) {
+        QDomElement node = nodeList.at(i).toElement();
+        if (uuid == node.attribute("uuid")) {
+            doc.removeChild(node);
+        }
     }
-#endif // KWALLET_ENABLED
-    m_address->deleteSection(strSection);
+}
+
+bool Global::convertAddressBook2XML()
+{
+    QDir dir;
+    if (dir.exists(m_addrXml))// do nothing if address.xml existed
+        return true;
+    else {
+        if (!dir.exists(m_addrCfg)) // simply copy from system if even address.cfg not existed
+            return createLocalFile(m_addrXml, m_pathLib + "address.xml");
+    }
+    // import system address.xml or create new one
+    QDomDocument doc;
+    QDomElement addresses;
+    QFile file(m_pathLib + "address.xml");
+    if (file.open(QIODevice::ReadOnly) && doc.setContent(&file)) {
+        addresses = doc.documentElement();
+    } else {
+        QDomProcessingInstruction instr =
+                doc.createProcessingInstruction("xml","version=\"1.0\" encoding=\"UTF-8\"");
+        doc.appendChild(instr);
+
+        addresses = doc.createElement("addresses");
+        doc.appendChild(addresses);
+    }
+    // Combine cfg address book
+    Config addrCfg(m_addrCfg);
+    int num = addrCfg.getItemValue("bbs list", "num").toInt();
+
+
+    QDomElement imported = doc.createElement("folder");
+    imported.setAttribute("name", tr("imported sites"));
+        addresses.insertBefore(imported, QDomNode());
+
+    for (int i = -1; i < num; i++) {
+        Param param;
+        loadAddress(addrCfg, i, param);
+        QDomElement site = doc.createElement("site");
+        if (i==-1)
+            site.setAttribute("uuid", QUuid().toString());
+        else 
+        {
+            QString uuid = QUuid::createUuid().toString();
+            site.setAttribute("uuid", uuid);
+            QDomElement addsite = doc.createElement("addsite");
+            addsite.setAttribute("uuid", uuid);
+            imported.appendChild(addsite);
+        }
+        foreach(QString key,param.m_mapParam.keys())
+            site.setAttribute(key, param.m_mapParam[key].toString());
+
+        site.setAttribute("opacity","100");
+        site.setAttribute("blinkcursor","true");
+        addresses.appendChild(site);
+    }
+    saveAddressXml(doc);
+    return true;
+}
+
+void Global::saveAddressXml(const QDomDocument& doc)
+{
+    QFile ofile(m_addrXml);
+    if (ofile.open(QIODevice::WriteOnly)) {
+        QTextStream out(&ofile);
+        out.setCodec("UTF-8");
+        out << doc.toString();
+        ofile.close();
+    }
 }
 
 void Global::loadPrefence()
 {
     QString strTmp;
-    strTmp = m_config->getItemValue("preference", "xim").toString();
-    m_pref.XIM = (Global::Conversion)strTmp.toInt();
-    strTmp = m_config->getItemValue("preference", "wordwrap").toString();
-    m_pref.nWordWrap = strTmp.toInt();
-    strTmp = m_config->getItemValue("preference", "wheel").toString();
-    m_pref.bWheel = (strTmp != "0");
-    strTmp = m_config->getItemValue("preference", "url").toString();
-    m_pref.bUrl = (strTmp != "0");
-    strTmp = m_config->getItemValue("preference", "blinktab").toString();
-    m_pref.bBlinkTab = (strTmp != "0");
-    strTmp = m_config->getItemValue("preference", "warn").toString();
-    m_pref.bWarn = (strTmp != "0");
-    strTmp = m_config->getItemValue("preference", "beep").toString();
-    m_pref.nBeep = strTmp.toInt();
-    m_pref.strWave = m_config->getItemValue("preference", "wavefile").toString();
-    strTmp = m_config->getItemValue("preference", "http").toString();
-    m_pref.strHttp = strTmp;
-    strTmp = m_config->getItemValue("preference", "antialias").toString();
-    m_pref.bAA = (strTmp != "0");
-    strTmp = m_config->getItemValue("preference", "tray").toString();
-    m_pref.bTray = (strTmp != "0");
-    strTmp = m_config->getItemValue("preference", "externalplayer").toString();
-    m_pref.strPlayer = strTmp;
 
-    strTmp = m_config->getItemValue("preference", "clearpool").toString();
-    m_pref.bClearPool = (strTmp != "0");
+    m_pref.XIM = (Global::Conversion)m_config->getItemValue("preference", "xim").toInt();
+    m_pref.nWordWrap = m_config->getItemValue("preference", "wordwrap").toInt();
+    m_pref.bWheel = m_config->getItemValue("preference", "wheel").toBool();
+    m_pref.bUrl = m_config->getItemValue("preference", "url").toBool();
+    m_pref.bBlinkTab = m_config->getItemValue("preference", "blinktab").toBool();
+    m_pref.bWarn = m_config->getItemValue("preference", "warn").toBool();
+    m_pref.nBeep = m_config->getItemValue("preference", "beep").toInt();
+    m_pref.strWave = m_config->getItemValue("preference", "wavefile").toString();
+    m_pref.strHttp = m_config->getItemValue("preference", "http").toString();
+    m_pref.bAA = m_config->getItemValue("preference", "antialias").toBool();
+    m_pref.bTray = m_config->getItemValue("preference", "tray").toBool();
+    m_pref.strPlayer = m_config->getItemValue("preference", "externalplayer").toString();
+    m_pref.strImageViewer = m_config->getItemValue("preference", "image").toString();
+    m_pref.bClearPool = m_config->getItemValue("preference", "clearpool").toBool();
+
     strTmp = m_config->getItemValue("preference", "pool").toString();
     m_pref.strPoolPath = strTmp.isEmpty() ? Global::instance()->pathCfg() + "pool/" : strTmp;
     if (m_pref.strPoolPath.right(1) != "/")
         m_pref.strPoolPath.append('/');
+    
     strTmp = m_config->getItemValue("preference", "zmodem").toString();
     m_pref.strZmPath = strTmp.isEmpty() ? Global::instance()->pathCfg() + "zmodem/" : strTmp;
     if (m_pref.strZmPath.right(1) != "/")
         m_pref.strZmPath.append('/');
-    strTmp = m_config->getItemValue("preference", "image").toString();
-    m_pref.strImageViewer = strTmp;
+    
+    
 }
 
 QString Global::getOpenFileName(const QString & filter, QWidget * widget)
@@ -443,7 +394,7 @@ QString Global::getSaveFileName(const QString& filename, QWidget* widget)
 #if defined(_OS_WIN32_) || defined(Q_OS_WIN32)
 bool Global::iniWorkingDir(QString param)
 {
-    char ExeNamePath[MAX_PATH], _fileCfg[MAX_PATH], _addrCfg[MAX_PATH];
+    char ExeNamePath[MAX_PATH], _fileCfg[MAX_PATH], _addrCfg[MAX_PATH], _addrXml[MAX_PATH];
     size_t LastSlash = 0;
 
     if (0 == GetModuleFileNameA(NULL, ExeNamePath, MAX_PATH)) {
@@ -459,7 +410,6 @@ bool Global::iniWorkingDir(QString param)
     }
     ExeNamePath[LastSlash+1] = '\0';
     m_pathLib = QString::fromLocal8Bit(ExeNamePath);
-    m_pathPic = QString::fromLocal8Bit(ExeNamePath);
     m_pathCfg = QString::fromLocal8Bit(ExeNamePath);
     strcpy(_fileCfg, ExeNamePath);
     strcat(_fileCfg, "qterm.cfg");
@@ -467,6 +417,11 @@ bool Global::iniWorkingDir(QString param)
     strcpy(_addrCfg, ExeNamePath);
     strcat(_addrCfg, "address.cfg");
     m_addrCfg = QString::fromLocal8Bit(_addrCfg);
+    strcpy(_addrXml, ExeNamePath);
+    strcat(_addrXml, "address.xml");    
+    m_addrXml = QString::fromLocal8Bit(_addrXml);
+    if (!convertAddressBook2XML())
+        return false;
 
     QString pathScheme = m_pathCfg + "scheme";
     if (!isPathExist(pathScheme))
@@ -495,7 +450,6 @@ bool Global::iniWorkingDir(QString param)
     if (conf.exists()) {
         QString path= QCoreApplication::applicationDirPath()+"/";
         m_pathLib = path;
-        m_pathPic = path;
         m_pathCfg = path;
         return true;
     }
@@ -531,22 +485,19 @@ bool Global::iniWorkingDir(QString param)
         return false;
 
 
-    // picPath --- $HOME/.qterm/pic prefered
-    m_pathPic = m_pathCfg + "pic";
-    dir.setPath(m_pathPic);
-    if (!dir.exists())
-        m_pathPic = m_pathLib;
-    else
-        m_pathPic = m_pathCfg;
-
     // copy configuration files
     m_fileCfg = m_pathCfg + "qterm.cfg";
     if (!createLocalFile(m_fileCfg, m_pathLib + "qterm.cfg"))
         return false;
     m_addrCfg = m_pathCfg + "address.cfg";
-    if (!createLocalFile(m_addrCfg, m_pathLib + "address.cfg"))
-        return false;
+    //if (!createLocalFile(m_addrCfg, m_pathLib + "address.cfg"))
+    //    return false;
+    m_addrXml = m_pathCfg + "address.xml";
+    //if (!createLocalFile(m_addrXml, m_pathLib + "address.xml"))
+    //    return false;
 
+    if (!convertAddressBook2XML())
+        return false;
     return true;
 }
 #endif
@@ -555,35 +506,12 @@ bool Global::iniSettings()
 {
     //install the translator
     QString lang = m_config->getItemValue("global", "language").toString();
-    if (lang == "eng")
-        m_language = Global::English;
-    else if (lang == "chs")
-        m_language = Global::SimpilifiedChinese;
+    Global::Language language = Global::English;
+    if (lang == "chs")
+        language = Global::SimplifiedChinese;
     else if (lang == "cht")
-        m_language = Global::TraditionalChinese;
-    else {
-        qDebug("Language setting is not correct");
-        m_language = Global::English;
-    }
-    if (lang != "eng" && !lang.isEmpty()) {
-        QString qt_qm;
-        if (lang == "chs")
-            qt_qm = QLibraryInfo::location(QLibraryInfo::TranslationsPath)+"/qt_zh_CN.qm";
-        else
-            qt_qm = QLibraryInfo::location(QLibraryInfo::TranslationsPath)+"/qt_zh_TW.qm";
-
-        static QTranslator * translator = new QTranslator(0);
-        translator->load(qt_qm);
-        qApp->installTranslator(translator);
-
-        // look in $HOME/.qterm/po/ first
-        QString qterm_qm = QDir::homePath() + "/.qterm/po/qterm_" + lang + ".qm";
-        if (!QFile::exists(qterm_qm))
-            qterm_qm = m_pathLib + "po/qterm_" + lang + ".qm";
-        translator = new QTranslator(0);
-        translator->load(qterm_qm);
-        qApp->installTranslator(translator);
-    }
+        language = Global::TraditionalChinese;
+    setLanguage(language);
     //set font
     QString family = m_config->getItemValue("global", "font").toString();
     QString pointsize = m_config->getItemValue("global", "pointsize").toString();
@@ -605,10 +533,8 @@ bool Global::iniSettings()
         return false;
 
     QString pathPool = m_config->getItemValue("preference", "pool").toString();
-
     if (pathPool.isEmpty())
         pathPool = m_pathCfg + "pool/";
-
     if (pathPool.right(1) != "/")
         pathPool.append('/');
 
@@ -691,6 +617,16 @@ bool Global::showSwitchBar() const
     return m_switchBar;
 }
 
+bool Global::showStatusBar() const
+{
+    return m_statusBar;
+}
+
+bool Global::showMenuBar() const
+{
+    return m_menuBar;
+}
+
 void Global::setClipConversion(Global::Conversion conversionId)
 {
     m_clipConversion = conversionId;
@@ -711,6 +647,11 @@ void Global::setStatusBar(bool isShow)
     m_statusBar = isShow;
 }
 
+void Global::setMenuBar(bool isShow)
+{
+    m_menuBar = isShow;
+}
+
 void Global::setBossColor(bool isBossColor)
 {
     m_bossColor = isBossColor;
@@ -729,6 +670,37 @@ void Global::setSwitchBar(bool isShow)
 void Global::setLanguage(Global::Language language)
 {
     m_language = language;
+    // unload previous translation
+    if (!m_translatorQT->isEmpty())
+        qApp->removeTranslator(m_translatorQT);
+    if (!m_translatorQTerm->isEmpty())
+        qApp->removeTranslator(m_translatorQTerm);
+    // check new translation files
+    QString qt_qm, qterm_qm;
+    switch(language)
+    {
+    case Global::SimplifiedChinese:
+        qt_qm = QLibraryInfo::location(QLibraryInfo::TranslationsPath)+"/qt_zh_CN.qm";
+        qterm_qm = m_pathCfg + "/po/qterm_chs.qm";
+        if (!QFile::exists(qterm_qm))
+            qterm_qm = m_pathLib + "po/qterm_chs.qm";
+
+        break;
+    case Global::TraditionalChinese:
+        qt_qm = QLibraryInfo::location(QLibraryInfo::TranslationsPath)+"/qt_zh_TW.qm";
+        qterm_qm = m_pathCfg + "/po/qterm_cht.qm";
+        if (!QFile::exists(qterm_qm))
+            qterm_qm = m_pathLib + "po/qterm_cht.qm";
+        break;
+    case Global::English:
+        return;
+    }
+    // load qt library translation
+    if (m_translatorQT->load(qt_qm))
+        qApp->installTranslator(m_translatorQT);
+    // load qterm translation
+    if (m_translatorQTerm->load(qterm_qm))
+        qApp->installTranslator(m_translatorQTerm);
 }
 
 const QString & Global::style() const
@@ -743,101 +715,41 @@ void Global::setStyle(const QString & style)
 
 void Global::loadConfig()
 {
-    QString strTmp;
-    strTmp = m_config->getItemValue("global", "fullscreen").toString();
-
-    if (strTmp == "1") {
-        setFullScreen(true);
-    } else {
-        setFullScreen(false);
-    }
-
+    setFullScreen(m_config->getItemValue("global", "fullscreen").toBool());
     setStyle(m_config->getItemValue("global", "theme").toString());
-
-    setEscapeString("");
-
-    strTmp = m_config->getItemValue("global", "clipcodec").toString();
-    setClipConversion((Global::Conversion)strTmp.toInt());
-
-    strTmp = m_config->getItemValue("global", "vscrollpos").toString();
-    if (strTmp == "0") {
-        setScrollPosition(Global::Hide);
-    } else if (strTmp == "1") {
-        setScrollPosition(Global::Left);
-    } else {
-        setScrollPosition(Global::Right);
-    }
-
-    strTmp = m_config->getItemValue("global", "statusbar").toString();
-    setStatusBar((strTmp != "0"));
-
-    strTmp = m_config->getItemValue("global", "switchbar").toString();
-    setSwitchBar((strTmp != "0"));
+    setClipConversion((Conversion)m_config->getItemValue("global", "clipcodec").toInt());
+    setScrollPosition((Position)m_config->getItemValue("global", "vscrollpos").toInt());
+    setMenuBar(m_config->getItemValue("global", "menubar").toBool());
+    setStatusBar(m_config->getItemValue("global", "statusbar").toBool());
+    setSwitchBar( m_config->getItemValue("global", "switchbar").toBool());
 
     setBossColor(false);
+    setEscapeString("");
 
     loadPrefence();
-
-}
-
-bool Global::showToolBar(const QString & toolbar)
-{
-    if (m_showToolBar.contains(toolbar)) {
-        return m_showToolBar.value(toolbar);
-    } else {
-        if (m_config->hasItem("ToolBars", toolbar+"Shown")) {
-            bool isShown = m_config->getItemValue("ToolBars", toolbar+"Shown").toBool();
-            m_showToolBar.insert(toolbar, isShown);
-            return isShown;
-        } else {
-            // Show toolbar by default
-            m_showToolBar.insert(toolbar, true);
-            return true;
-        }
-    }
-}
-
-void Global::setShowToolBar(const QString & toolbar, bool isShown)
-{
-    m_showToolBar.insert(toolbar, isShown);
-}
-
-void Global::saveShowToolBar()
-{
-    QMapIterator<QString, bool> i(m_showToolBar);
-    while (i.hasNext()) {
-        i.next();
-        m_config->setItemValue("ToolBars",i.key()+"Shown", i.value());
-    }
 }
 
 void Global::saveConfig()
 {
 
-    QString strTmp;
-    //save font
+    QString lang;
+    //language
+    switch (m_language)
+    {
+    case English:            lang = "eng"; break;
+    case SimplifiedChinese:  lang = "chs"; break;
+    case TraditionalChinese: lang = "cht"; break;
+    }
+    m_config->setItemValue("global", "language", lang);
     m_config->setItemValue("global", "font", qApp->font().family());
-    strTmp.setNum(QFontInfo(qApp->font()).pointSize());
-    m_config->setItemValue("global", "pointsize", strTmp);
-
-    if (isFullScreen())
-        m_config->setItemValue("global", "fullscreen", "1");
-    else
-        m_config->setItemValue("global", "fullscreen", "0");
-
-    // cstrTmp.setNum(theme);
+    m_config->setItemValue("global", "pointsize", QFontInfo(qApp->font()).pointSize());
+    m_config->setItemValue("global", "fullscreen", isFullScreen());
     m_config->setItemValue("global", "theme", style());
-
-
-    // Should we convert the numbers to strings like "GBK" and "Big5";
-    strTmp.setNum(clipConversion());
-    m_config->setItemValue("global", "clipcodec", strTmp);
-
-    strTmp.setNum(scrollPosition());
-    m_config->setItemValue("global", "vscrollpos", strTmp);
-
-    m_config->setItemValue("global", "switchbar", showSwitchBar() ? "1" : "0");
-    saveShowToolBar();
+    m_config->setItemValue("global", "clipcodec", clipConversion());
+    m_config->setItemValue("global", "vscrollpos", scrollPosition());
+    m_config->setItemValue("global", "menubar", showMenuBar());
+    m_config->setItemValue("global", "statusbar", showStatusBar());
+    m_config->setItemValue("global", "switchbar", showSwitchBar());
     m_config->save();
 
 }

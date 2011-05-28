@@ -12,8 +12,6 @@ AUTHOR:        kingson fiasco
 #include "qterm.h"
 #include "qtermwindow.h"
 #include "qtermframe.h"
-#include "qtermwndmgr.h"
-
 #include "qtermscreen.h"
 #include "qtermdecode.h"
 #include "qtermtelnet.h"
@@ -240,13 +238,14 @@ char Window::direction[][5] = {
 };
 
 //constructor
-Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const char * name, Qt::WFlags wflags)
-        : QMainWindow(parent, wflags), m_strMessage(), location()
+Window::Window(Frame * frame, Param param, const QString &uuid, QWidget * parent, const char * name, Qt::WFlags wflags)
+        : WindowBase(parent, wflags), m_strMessage(), location()
 {
+	groupActions();
 
     m_pFrame = frame;
     m_param = param;
-    m_nAddrIndex = addr;
+    m_strUuid = uuid;
     m_hostInfo = NULL;
     m_translator = NULL;
     QString pathLib = Global::instance()->pathLib();
@@ -261,26 +260,28 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 #endif // SCRIPT_ENABLED
 //init the textline list
 
-    m_codec = QTextCodec::codecForName(param.m_BBSCode.toLatin1());
-    m_pBuffer = new Buffer(m_param.m_nRow, m_param.m_nCol, m_param.m_nScrollLines);
-    if (param.m_nProtocolType == 0)
-        m_pTelnet = new Telnet(m_param.m_strTerm,
-                               m_param.m_nRow, m_param.m_nCol, false);
+	QString strTerm = m_param.m_mapParam["termtype"].toString();
+	int nColumn = m_param.m_mapParam["column"].toInt();
+	int nRow = m_param.m_mapParam["row"].toInt();
+	int nScroll = m_param.m_mapParam["scroll"].toInt();
+
+    m_codec = QTextCodec::codecForName(param.m_mapParam["bbscode"].toString().toLatin1());
+    m_pBuffer = new Buffer(nRow, nColumn, nScroll);
+    if (param.m_mapParam["protocol"] == 0)
+        m_pTelnet = new Telnet(strTerm, nRow, nColumn, false);
     else {
 #ifndef SSH_ENABLED
         QMessageBox::warning(this, "QTerm",
                              tr("SSH support is not compiled, QTerm can only use Telnet!"));
-        m_pTelnet = new Telnet(m_param.m_strTerm,
-                               m_param.m_nRow, m_param.m_nCol, false);
+        m_pTelnet = new Telnet(strTerm, nRow, nColumn, false);
 #else
-        m_pTelnet = new Telnet(m_param.m_strTerm,
-                               m_param.m_nRow, m_param.m_nCol, true);
+        m_pTelnet = new Telnet(strTerm, nRow, nColumn, true);
 #endif
     }
     connect(m_pBuffer, SIGNAL(windowSizeChanged(int, int)),
             m_pTelnet, SLOT(windowSizeChanged(int, int)));
     m_pZmDialog = new zmodemDialog(this);
-    m_pZmodem = new Zmodem(this, m_pTelnet, m_codec, param.m_nProtocolType);
+	m_pZmodem = new Zmodem(this, m_pTelnet, m_codec, param.m_mapParam["protocol"].toInt());
 
     if (m_codec == 0) {
         qDebug("Fallback to GBK codec");
@@ -295,9 +296,8 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_bCheckIP = m_pIPLocation->haveFile();
     m_pSound = NULL;
 
-    setFocusProxy(m_pScreen);
-    setCentralWidget(m_pScreen);
-    connect(m_pFrame, SIGNAL(bossColor()), m_pScreen, SLOT(bossColor()));
+    setWidget(m_pScreen);
+
     connect(m_pFrame, SIGNAL(scrollChanged()), m_pScreen, SLOT(updateScrollBar()));
     connect(m_pScreen, SIGNAL(inputEvent(const QString &)), this, SLOT(inputHandle(const QString &)));
     connect(m_pZmodem, SIGNAL(ZmodemState(int, int, const QString&)),
@@ -337,8 +337,6 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     connect(m_idleTimer, SIGNAL(timeout()), this, SLOT(idleProcess()));
     m_replyTimer = new QTimer;
     connect(m_replyTimer, SIGNAL(timeout()), this, SLOT(replyProcess()));
-    m_tabTimer = new QTimer;
-    connect(m_tabTimer, SIGNAL(timeout()), this, SLOT(blinkTab()));
     m_reconnectTimer = new QTimer;
     connect(m_reconnectTimer, SIGNAL(timeout()), this, SLOT(reconnect()));
     m_updateTimer = new QTimer;
@@ -347,10 +345,10 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 
 
 // initial varibles
-    m_bCopyColor = false;
-    m_bCopyRect = false;
+    m_bColorCopy = false;
+    m_bRectCopy = false;
     m_bAntiIdle = true;
-    m_bAutoReply = m_param.m_bAutoReply;
+	m_bAutoReply = m_param.m_mapParam["bautoreply"].toBool();
     m_bBeep  = !(
 #ifndef PHONON_ENABLED
                    Global::instance()->m_pref.strPlayer.isEmpty() ||
@@ -360,7 +358,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_bWordWrap = false;
     m_bAutoCopy = true;
     m_bMessage = false;
-    m_bReconnect = m_param.m_bReconnect;
+	m_bReconnect = m_param.m_mapParam["reconnect"].toBool();
 
     m_pDAThread = 0;
     m_bConnected = false;
@@ -369,20 +367,20 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
     m_bMouseX11 = false;
     m_bMouseClicked = false;
 #ifdef SSH_ENABLED
-    if (param.m_nProtocolType != 0)
+    if (param.m_mapParam["protocol"].toInt() != 0)
         m_bDoingLogin = true;
     else
 #endif
         m_bDoingLogin = false;
 
-    cursor[0] = QCursor(QPixmap(pathLib + "cursor/home.xpm"));
-    cursor[1] = QCursor(QPixmap(pathLib + "cursor/end.xpm"));
-    cursor[2] = QCursor(QPixmap(pathLib + "cursor/pageup.xpm"));
-    cursor[3] = QCursor(QPixmap(pathLib + "cursor/pagedown.xpm"));
-    cursor[4] = QCursor(QPixmap(pathLib + "cursor/prev.xpm"));
-    cursor[5] = QCursor(QPixmap(pathLib + "cursor/next.xpm"));
-    cursor[6] = QCursor(QPixmap(pathLib + "cursor/exit.xpm"), 0, 10);
-    cursor[7] = QCursor(QPixmap(pathLib + "cursor/hand.xpm"));
+    cursor[0] = QCursor(QPixmap(":/cursor/home.xpm"));
+    cursor[1] = QCursor(QPixmap(":/cursor/end.xpm"));
+    cursor[2] = QCursor(QPixmap(":/cursor/pageup.xpm"));
+    cursor[3] = QCursor(QPixmap(":/cursor/pagedown.xpm"));
+    cursor[4] = QCursor(QPixmap(":/cursor/prev.xpm"));
+    cursor[5] = QCursor(QPixmap(":/cursor/next.xpm"));
+    cursor[6] = QCursor(QPixmap(":/cursor/exit.xpm"), 0, 10);
+    cursor[7] = QCursor(QPixmap(":/cursor/hand.xpm"));
     cursor[8] = Qt::ArrowCursor;
 
     // the system wide script
@@ -390,7 +388,7 @@ Window::Window(Frame * frame, Param param, int addr, QWidget * parent, const cha
 
     initScript();
 
-    loadKeyboardTranslator(param.m_strKeyboardProfile);
+    loadKeyboardTranslator(param.m_mapParam["keyboardprofile"].toString());
 
     connectHost();
 }
@@ -408,7 +406,6 @@ Window::~Window()
 
     delete m_idleTimer;
     delete m_replyTimer;
-    delete m_tabTimer;
     delete m_updateTimer;
 
     delete m_pUrl;
@@ -433,12 +430,10 @@ void Window::closeEvent(QCloseEvent * clse)
                        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
         if (ret == QMessageBox::Yes) {
             m_pTelnet->close();
-            m_pFrame->wndmgr->removeWindow(this);
             clse->accept();
         } else
             clse->ignore();
     } else {
-        m_pFrame->wndmgr->removeWindow(this);
         clse->accept();
     }
 }
@@ -452,17 +447,13 @@ void Window::idleProcess()
     // do as autoreply when it is enabled
     if (m_replyTimer->isActive() && m_bAutoReply) {
         replyMessage();
-        if (m_tabTimer->isActive()) {
-            m_tabTimer->stop();
-            m_pFrame->wndmgr->blinkTheTab(this, TRUE);
-        }
         return;
     }
 
     m_bIdling = true;
     // system script can handle that
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("antiIdle");
         if (func.isFunction()) {
             func.call();
@@ -480,7 +471,7 @@ void Window::idleProcess()
 #endif
     // the default function
     int length;
-    QByteArray cstr = parseString(m_param.m_strAntiString.toLocal8Bit(), &length);
+    QByteArray cstr = parseString(m_param.m_mapParam["antiidlestring"].toString().toLocal8Bit(), &length);
     m_pTelnet->write(cstr, length);
 }
 
@@ -491,18 +482,6 @@ void Window::replyProcess()
         replyMessage();
     else // else just stop the timer
         m_replyTimer->stop();
-
-    if (m_tabTimer->isActive()) {
-        m_tabTimer->stop();
-        m_pFrame->wndmgr->blinkTheTab(this, TRUE);
-    }
-}
-
-void Window::blinkTab()
-{
-    static bool bVisible = TRUE;
-    m_pFrame->wndmgr->blinkTheTab(this, bVisible);
-    bVisible = !bVisible;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -521,7 +500,7 @@ void Window::leaveEvent(QEvent *)
 void Window::mouseDoubleClickEvent(QMouseEvent * me)
 {
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
         if (func.isFunction()) {
             func.call(QScriptValue(), QScriptValueList() << 3 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
@@ -541,19 +520,12 @@ void Window::mouseDoubleClickEvent(QMouseEvent * me)
 
 void Window::mousePressEvent(QMouseEvent * me)
 {
-    // stop  the tab blinking
-    if (m_tabTimer->isActive()) {
-        m_tabTimer->stop();
-        m_pFrame->wndmgr->blinkTheTab(this, TRUE);
-    }
-
     // Left Button for selecting
     if (me->button()&Qt::LeftButton && !(me->modifiers())) {
         // clear the selected before
         if (m_ptSelStart != m_ptSelEnd) {
             m_pBuffer->clearSelect();
-            m_pScreen->m_ePaintState = Screen::NewData;
-            m_pScreen->update();
+            m_pScreen->updateRegion();
         }
 
         // set the selecting flag
@@ -563,7 +535,7 @@ void Window::mousePressEvent(QMouseEvent * me)
     }
 
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+    if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
         if (func.isFunction()) {
             func.call(QScriptValue(), QScriptValueList() << 0 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
@@ -628,14 +600,13 @@ void Window::mouseMoveEvent(QMouseEvent * me)
         m_ptSelEnd = me->pos();
         QPoint point = m_ptSelEnd - m_ptSelStart;
         if (point.manhattanLength() > 3) {
-            m_pBuffer->setSelect(m_pScreen->mapToChar(m_ptSelStart), m_pScreen->mapToChar(m_ptSelEnd), m_bCopyRect);
-            m_pScreen->m_ePaintState = Screen::NewData;
-            m_pScreen->update();
+            m_pBuffer->setSelect(m_pScreen->mapToChar(m_ptSelStart), m_pScreen->mapToChar(m_ptSelEnd), m_bRectCopy);
+            m_pScreen->updateRegion();
         }
     }
 
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
         if (func.isFunction()) {
             func.call(QScriptValue(), QScriptValueList() << 2 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
@@ -697,11 +668,10 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
     // Left Button for selecting
     m_ptSelEnd = me->pos();
     if (m_ptSelEnd != m_ptSelStart && m_bSelecting) {
-        m_pBuffer->setSelect(m_pScreen->mapToChar(m_ptSelStart), m_pScreen->mapToChar(m_ptSelEnd), m_bCopyRect);
-        m_pScreen->m_ePaintState = Screen::NewData;
-        m_pScreen->update();
+        m_pBuffer->setSelect(m_pScreen->mapToChar(m_ptSelStart), m_pScreen->mapToChar(m_ptSelEnd), m_bRectCopy);
+        m_pScreen->updateRegion();
         if (m_bAutoCopy)
-            copy();
+            on_actionCopy_triggered();
         m_bSelecting = false;
         return;
     }
@@ -709,7 +679,7 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
 
 
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onMouseEvent");
         if (func.isFunction()) {
             func.call(QScriptValue(), QScriptValueList() << 1 << (int) me->button() << (int) me->buttons() << (int) me->modifiers() << me->x() << me->y());
@@ -790,7 +760,7 @@ void Window::mouseReleaseEvent(QMouseEvent * me)
 void Window::wheelEvent(QWheelEvent *we)
 {
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         m_scriptHelper->setAccepted(false);
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onWheelEvent");
         if (func.isFunction()) {
@@ -807,19 +777,23 @@ void Window::wheelEvent(QWheelEvent *we)
         }
     }
 #endif
-    int j = we->delta() > 0 ? 4 : 5;
-    if (!(we->modifiers())) {
-        if (Global::instance()->m_pref.bWheel && m_bConnected)
-            m_pTelnet->write(direction[j], sizeof(direction[j]));
-        return;
-    }
+        if (Global::instance()->m_pref.bWheel) {
+            int j = we->delta() > 0 ? 4 : 5;
+            if (!(we->modifiers())) {
+                if (Global::instance()->m_pref.bWheel && m_bConnected)
+                    m_pTelnet->write(direction[j], sizeof(direction[j]));
+            }
+        }
+        else {
+            m_pScreen->scrollLine(-we->delta()/8/15);
+        }
 }
 
 //keyboard input event
 void Window::keyPressEvent(QKeyEvent * e)
 {
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         m_scriptHelper->setAccepted(false);
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onKeyPressEvent");
         if (func.isFunction()) {
@@ -840,12 +814,6 @@ void Window::keyPressEvent(QKeyEvent * e)
         if (e->key() == Qt::Key_Return)
             reconnect();
         return;
-    }
-
-    // stop  the tab blinking
-    if (m_tabTimer->isActive()) {
-        m_tabTimer->stop();
-        m_pFrame->wndmgr->blinkTheTab(this, TRUE);
     }
 
     // message replying
@@ -901,27 +869,38 @@ void Window::keyPressEvent(QKeyEvent * e)
 //connect slot
 void Window::connectHost()
 {
+	int nProtocol = m_param.m_mapParam["protocol"].toInt();
+	bool bAutoLogin = m_param.m_mapParam["autologin"].toBool();
+	QString strAddr = m_param.m_mapParam["addr"].toString();
+	int nPort = m_param.m_mapParam["port"].toInt();
+	QString strUser = m_param.m_mapParam["user"].toString();
+	QString strPasswd = m_param.m_mapParam["password"].toString();
+	QString strTerm = m_param.m_mapParam["termtype"].toString();
+
     if (m_hostInfo == NULL) {
-        if (m_param.m_nProtocolType == 0)
-            m_hostInfo = new TelnetInfo(m_param.m_strAddr , m_param.m_uPort);
+        if (nProtocol == 0)
+            m_hostInfo = new TelnetInfo(strAddr, nPort);
         else {
 #ifndef SSH_ENABLED
-            m_hostInfo = new TelnetInfo(m_param.m_strAddr , m_param.m_uPort);
+            m_hostInfo = new TelnetInfo(strAddr, nPort);
 #else
-            SSHInfo * sshInfo = new SSHInfo(m_param.m_strAddr , m_param.m_uPort);
-            if (m_param.m_bAutoLogin) {
-                sshInfo->setUserName(m_param.m_strUser);
-                sshInfo->setPassword(m_param.m_strPasswd);
+            SSHInfo * sshInfo = new SSHInfo(strAddr , nPort);
+            if (bAutoLogin) {
+                sshInfo->setUserName(strUser);
+                sshInfo->setPassword(strPasswd);
             }
             m_hostInfo = sshInfo;
 #endif
         }
     }
-    m_hostInfo->setTermType(m_param.m_strTerm);
+    m_hostInfo->setTermType(strTerm);
 
-    m_pTelnet->setProxy(m_param.m_nProxyType, m_param.m_bAuth,
-                        m_param.m_strProxyHost, m_param.m_uProxyPort,
-                        m_param.m_strProxyUser, m_param.m_strProxyPasswd);
+	m_pTelnet->setProxy(m_param.m_mapParam["proxytype"].toInt(),
+						m_param.m_mapParam["proxyauth"].toBool(),
+						m_param.m_mapParam["proxyaddr"].toString(), 
+						m_param.m_mapParam["proxyport"].toInt(),
+						m_param.m_mapParam["proxyuser"].toString(), 
+						m_param.m_mapParam["proxypassword"].toString());
 
     m_pTelnet->connectHost(m_hostInfo);
 }
@@ -969,7 +948,7 @@ void Window::ZmodemState(int type, int value, const QString& msg)
 {
     QString status = m_codec->toUnicode(msg.toLatin1());
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+	if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         m_scriptHelper->setAccepted(false);
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onZmodemState");
         if (func.isFunction()) {
@@ -1057,7 +1036,7 @@ void Window::ZmodemState(int type, int value, const QString& msg)
 void Window::TelnetState(int state)
 {
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+    if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         m_scriptHelper->setAccepted(false);
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onTelnetState");
         if (func.isFunction()) {
@@ -1091,8 +1070,7 @@ void Window::TelnetState(int state)
     case TSHOSTCONNECTED:
         m_pScreen->osd()->display(tr("connected"));
         m_bConnected = true;
-        m_pFrame->updateMenuToolBar();
-        if (m_param.m_bAutoLogin)
+        if (m_param.m_mapParam["autologin"].toBool())
             m_bDoingLogin = true;
         break;
     case TSPROXYCONNECTED:
@@ -1103,7 +1081,7 @@ void Window::TelnetState(int state)
         break;
     case TSPROXYFAIL:
         m_pScreen->osd()->display(tr("proxy failed"));
-        disconnect();
+        on_actionDisconnect_triggered();
         break;
     case TSREFUSED:
         m_pScreen->osd()->display(tr("connection refused"));
@@ -1111,12 +1089,12 @@ void Window::TelnetState(int state)
         break;
     case TSREADERROR:
         m_pScreen->osd()->display(tr("error when reading from server"), PageViewMessage::Error);
-        disconnect();
+        on_actionDisconnect_triggered();
         break;
     case TSCLOSED:
         m_pScreen->osd()->display(tr("connection closed"));
         connectionClosed();
-        if (m_param.m_bReconnect && m_bReconnect)
+        if (m_param.m_mapParam["reconnect"].toBool() && m_bReconnect)
             reconnectProcess();
         break;
     case TSCLOSEFINISH:
@@ -1136,18 +1114,18 @@ void Window::TelnetState(int state)
         break;
     case TSERROR:
         m_pScreen->osd()->display(tr("error in connection"), PageViewMessage::Error);
-        disconnect();
+        on_actionDisconnect_triggered();
         break;
     case TSPROXYERROR:
         m_pScreen->osd()->display(tr("error in proxy"), PageViewMessage::Error);
-        disconnect();
+        on_actionDisconnect_triggered();
         break;
     case TSWRITED:
         // restart the idle timer
         if (m_idleTimer->isActive())
             m_idleTimer->stop();
         if (m_bAntiIdle)
-            m_idleTimer->start(m_param.m_nMaxIdle*1000);
+            m_idleTimer->start(m_param.m_mapParam["maxidle"].toInt()*1000);
         m_bIdling = false;
         break;
     default:
@@ -1162,19 +1140,21 @@ void Window::TelnetState(int state)
 /* ------------------------------------------------------------------------ */
 
 
-void Window::copy()
+void Window::on_actionCopy_triggered()
 {
     QClipboard *clipboard = QApplication::clipboard();
 
-    clipboard->setText(m_pBuffer->getSelectText(m_bCopyRect, m_bCopyColor,
-                       parseString((const char *)m_param.m_strEscape.toLatin1())),
+	QString strEscape = m_param.m_mapParam["escape"].toString();
+
+    clipboard->setText(m_pBuffer->getSelectText(m_bRectCopy, m_bColorCopy,
+                       parseString((const char *)strEscape.toLatin1())),
                        QClipboard::Clipboard);
-    clipboard->setText(m_pBuffer->getSelectText(m_bCopyRect, m_bCopyColor,
-                       parseString((const char *)m_param.m_strEscape.toLatin1())),
+    clipboard->setText(m_pBuffer->getSelectText(m_bRectCopy, m_bColorCopy,
+                       parseString((const char *)strEscape.toLatin1())),
                        QClipboard::Selection);
 }
 
-void Window::paste()
+void Window::on_actionPaste_triggered()
 {
     pasteHelper(true);
 }
@@ -1197,7 +1177,7 @@ void Window::pasteHelper(bool clip)
 
     if (!Global::instance()->escapeString().isEmpty())
         strText.replace(parseString(Global::instance()->escapeString().toLatin1()),
-                         parseString((const char *)m_param.m_strEscape.toLatin1()));
+                         parseString((const char *)m_param.m_mapParam["escape"].toString().toLatin1()));
 
     if (m_bWordWrap) {
         // insert '\n' as needed
@@ -1226,7 +1206,7 @@ void Window::pasteHelper(bool clip)
     cstrText = m_codec->fromUnicode(strText);
     m_pTelnet->write(cstrText, cstrText.length());
 }
-void Window::copyArticle()
+void Window::on_actionCopy_Article_triggered()
 {
     //return;
 
@@ -1234,7 +1214,7 @@ void Window::copyArticle()
         return;
 
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+    if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         m_scriptHelper->setAccepted(false);
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onCopyArticle");
         if (func.isFunction()) {
@@ -1259,7 +1239,7 @@ void Window::copyArticle()
 
 }
 
-void Window::setting()
+void Window::on_actionCurrent_Session_Setting_triggered()
 {
     addrDialog set(this, true);
 
@@ -1272,12 +1252,17 @@ void Window::setting()
     connect(set.ui.generalFontComboBox, SIGNAL(currentFontChanged(const QFont &)), m_pScreen, SLOT(generalFontChanged(const QFont &)));
     connect(set.ui.fontSizeSpinBox, SIGNAL(valueChanged(int)), m_pScreen, SLOT(fontSizeChanged(int)));
     connect(set.ui.schemeComboBox, SIGNAL(currentIndexChanged(int)), m_pScreen, SLOT(schemeChanged(int)));
+    connect(set.ui.opacityHorizontalSlider, SIGNAL(valueChanged(int)),m_pScreen, SLOT(opacityChanged(int)));
     set.ui.asciiFontComboBox->setCurrentFont(m_pScreen->asciiFont());
     set.ui.generalFontComboBox->setCurrentFont(m_pScreen->generalFont());
 
     if (set.exec() == 1) {
         m_param = set.param;
-        Global::instance()->saveAddress(m_nAddrIndex, m_param);
+        if (!m_strUuid.isEmpty()) {
+            QDomDocument doc = Global::instance()->addrXml();
+            Global::instance()->saveAddress(doc,m_strUuid, m_param);
+            Global::instance()->saveAddressXml(doc);
+        }
     } else {
         m_param = backup;
     }
@@ -1287,7 +1272,7 @@ void Window::setting()
     QApplication::postEvent(m_pScreen, re);
 }
 
-void Window::disconnect()
+void Window::on_actionDisconnect_triggered()
 {
     m_pTelnet->close();
 }
@@ -1312,64 +1297,105 @@ void Window::showIP()
     }
 }
 
-void Window::refresh()
+void Window::on_actionBoss_Color_toggled(bool boss)
+{
+	Global::instance()->setBossColor(boss);
+	m_pScreen->bossColor();
+}
+
+void Window::on_actionRefresh_triggered()
 {
     //m_pScreen->repaint(true);
     m_pScreen->m_ePaintState = Screen::Show;
     m_pScreen->update();
 }
 
-void Window::debugConsole()
+void Window::on_actionUnderline_toggled(bool underline)
+{
+	QString strEscape = m_param.m_mapParam["escape"].toString();
+	if (underline)
+		strEscape += "4m";
+	else
+		strEscape += "0m";
+	QByteArray sequence = parseString(strEscape.toLocal8Bit());
+	m_pTelnet->write(sequence,sequence.length());
+}
+void Window::on_actionBlink_toggled(bool blink)
+{
+	QString strEscape = m_param.m_mapParam["escape"].toString();
+	if (blink)
+		strEscape += "5m";
+	else
+		strEscape += "0m";
+	QByteArray sequence = parseString(strEscape.toLocal8Bit());
+	m_pTelnet->write(sequence,sequence.length());
+}
+void Window::on_actionPallete_triggered(const QVariant& data)
+{
+	if (data.isNull())
+		return;
+	int index = data.toInt() >> 4;
+	int role  = data.toInt() & 0x0f;
+	int color = index;
+	QString strEscape = m_param.m_mapParam["escape"].toString();
+	// highlight
+	if (index > 7) {
+		strEscape += "1;";
+		color = index - 8;
+	}
+	// fg or bg
+	if (role == 0) //fg
+		strEscape += QString::number(30+color);
+	else // bg
+		strEscape += QString::number(40+color);
+	strEscape += "m";
+	// write to server
+	QByteArray sequence = parseString(strEscape.toLocal8Bit());
+	m_pTelnet->write(sequence,sequence.length());
+}
+void Window::on_actionSymbols_triggered(const QVariant& data)
+{
+	setFocus(); // steal back focus from symbol table
+	QByteArray text = m_codec->fromUnicode(data.toString());
+	m_pTelnet->write(text,text.length());
+}
+
+void Window::on_actionDebug_Console_triggered()
 {
 #ifdef SCRIPTTOOLS_ENABLED
     m_scriptDebugger->action(QScriptEngineDebugger::InterruptAction)->trigger();
+#else
+	QMessageBox::information(this, "QTerm",
+                             tr("You need to enable the script engine debugger to use this feature. \
+								Please recompile QTerm with the debugger enabled (need Qt 4.5 or newer version)"));
 #endif
 }
 
-void Window::runScript(const QString & filename)
+void Window::on_actionRun_triggered()
 {
-#ifdef SCRIPT_ENABLED
-    QString file = filename;
-    if (file.isEmpty()){
-        // get the previous dir
-        file= Global::instance()->getOpenFileName("Script Files (*.js *.txt)", this);
-    }
-    if (file.isEmpty())
-        return;
-
-    m_scriptHelper->loadScriptFile(file);
-#endif
+	runScript();
 }
 
-void Window::stopScript()
+void Window::on_actionStop_triggered()
 {
 #ifdef SCRIPT_ENABLED
     m_scriptEngine->abortEvaluation();
 #endif
 }
 
-void Window::viewMessages()
+void Window::on_actionReload_Script_triggered()
 {
-    msgDialog msg(this);
-
-//    const char * size = Global::instance()->fileCfg()->getItemValue("global", "msgdialog").toString().toLatin1();
-//    if (size != NULL) {
-//        int x, y, cx, cy;
-//        sscanf(size, "%d %d %d %d", &x, &y, &cx, &cy);
-//        msg.resize(QSize(cx, cy));
-//        msg.move(QPoint(x, y));
-//    }
-
-    msg.ui.msgBrowser->setPlainText(m_strMessage);
-    msg.exec();
-
-//    QString strSize = QString("%1 %2 %3 %4").arg(msg.x()).arg(msg.y()).arg(msg.width()).arg(msg.height());
-//    Global::instance()->fileCfg()->setItemValue("global", "msgdialog", strSize);
-//    Global::instance()->fileCfg()->save();
-
+	initScript();
 }
 
-void Window::antiIdle(bool isEnabled)
+void Window::on_actionView_Message_triggered()
+{
+    msgDialog msg(this);
+    msg.ui.msgBrowser->setPlainText(m_strMessage);
+    msg.exec();
+}
+
+void Window::on_actionAnti_Idle_toggled(bool isEnabled)
 {
     m_bAntiIdle = isEnabled;
     // disabled
@@ -1377,10 +1403,10 @@ void Window::antiIdle(bool isEnabled)
         m_idleTimer->stop();
     // enabled
     if (m_bAntiIdle && !m_idleTimer->isActive())
-        m_idleTimer->start(m_param.m_nMaxIdle*1000);
+        m_idleTimer->start(m_param.m_mapParam["maxidle"].toInt()*1000);
 }
 
-void Window::autoReply(bool isEnabled)
+void Window::on_actionAuto_Reply_toggled(bool isEnabled)
 {
     m_bAutoReply = isEnabled;
     // disabled
@@ -1388,7 +1414,7 @@ void Window::autoReply(bool isEnabled)
         m_replyTimer->stop();
     // enabled
 // if( m_bAutoReply && !m_replyTimer->isActive() )
-//  m_replyTimer->start(m_param.m_nMaxIdle*1000/2);
+//  m_replyTimer->start(m_param.m_mapParam["maxidle"].toInt()*1000/2);
 }
 
 void Window::connectionClosed()
@@ -1400,8 +1426,6 @@ void Window::connectionClosed()
 
     m_pScreen->osd()->display(tr("connection closed"));
 
-    m_pFrame->updateMenuToolBar();
-
     setCursor(cursor[8]);
 
     QString strMsg = "";
@@ -1411,24 +1435,29 @@ void Window::connectionClosed()
     strMsg += "\x1b[17C===========================================\n";
 
     m_pDecode->decode(strMsg.toLatin1(), strMsg.length());
-    m_pScreen->m_ePaintState = Screen::NewData;
-    m_pScreen->update();
+    m_pScreen->updateRegion();
 }
 
 void Window::doAutoLogin()
 {
-    if (!m_param.m_strPreLogin.isEmpty()) {
-        QByteArray temp = parseString(m_param.m_strPreLogin.toLatin1());
+	QString strPreLogin = m_param.m_mapParam["prelogin"].toString();
+	QString strUser = m_param.m_mapParam["user"].toString();
+	QString strPasswd = m_param.m_mapParam["password"].toString();
+
+	QString strPostLogin = m_param.m_mapParam["postlogin"].toString();
+
+    if (!strPreLogin.isEmpty()) {
+        QByteArray temp = parseString(strPreLogin.toLatin1());
         m_pTelnet->write((const char *)(temp), temp.length());
     }
-    if (!m_param.m_strUser.isEmpty()) {
-        QByteArray temp = m_param.m_strUser.toLocal8Bit();
+    if (!strUser.isEmpty()) {
+        QByteArray temp = strUser.toLocal8Bit();
         m_pTelnet->write((const char *)(temp), temp.length());
         char ch = CHAR_CR;
         m_pTelnet->write(&ch, 1);
     }
-    if (!m_param.m_strPasswd.isEmpty()) {
-        QByteArray temp = m_param.m_strPasswd.toLocal8Bit();
+    if (!strPasswd.isEmpty()) {
+        QByteArray temp = strPasswd.toLocal8Bit();
         m_pTelnet->write((const char *)(temp), temp.length());
         char ch = CHAR_CR;
         m_pTelnet->write(&ch, 1);
@@ -1440,8 +1469,8 @@ void Window::doAutoLogin()
     sleep(1);
 #endif
 
-    if (!m_param.m_strPostLogin.isEmpty()) {
-        QByteArray temp = parseString(m_param.m_strPostLogin.toLatin1());
+    if (!strPostLogin.isEmpty()) {
+        QByteArray temp = parseString(strPostLogin.toLatin1());
         m_pTelnet->write((const char *)(temp), temp.length());
     }
     m_bDoingLogin = false;
@@ -1449,12 +1478,14 @@ void Window::doAutoLogin()
 
 void Window::reconnectProcess()
 {
+	int nRetry = m_param.m_mapParam["retrytimes"].toInt();
+	int nReconnectInterval = m_param.m_mapParam["interval"].toInt();
     static int retry = 0;
-    if (retry < m_param.m_nRetry || m_param.m_nRetry == -1) {
-        if (m_param.m_nReconnectInterval <= 0)
+    if (retry < nRetry || nRetry == -1) {
+        if (nReconnectInterval <= 0)
             reconnect();
         else
-            m_reconnectTimer->start(m_param.m_nReconnectInterval*1000);
+            m_reconnectTimer->start(nReconnectInterval*1000);
         retry++;
     }
 }
@@ -1537,9 +1568,9 @@ void Window::replyMessage()
     if (m_replyTimer->isActive())
         m_replyTimer->stop();
 
-    QByteArray cstrTmp = m_param.m_strReplyKey.toLocal8Bit();
+	QByteArray cstrTmp = m_param.m_mapParam["replykey"].toString().toLocal8Bit();
     QByteArray cstr = parseString(cstrTmp.isEmpty() ? QByteArray("^Z") : cstrTmp);
-    cstr += m_codec->fromUnicode(m_param.m_strAutoReply);
+	cstr += m_codec->fromUnicode(m_param.m_mapParam["autoreply"].toString());
 
     cstr += '\n';
     m_pTelnet->write(cstr, cstr.length());
@@ -1568,12 +1599,6 @@ void Window::sendParsedString(const QString& str)
     m_pTelnet->write(cstr, length);
 }
 
-void Window::setMouseMode(bool on)
-{
-    m_bMouseX11 = on;
-}
-
-
 void Window::initScript()
 {
 #ifdef SCRIPT_ENABLED
@@ -1593,10 +1618,10 @@ void Window::initScript()
 
     QScriptValue scriptHelper = m_scriptEngine->newQObject(m_scriptHelper);
     m_scriptEngine->globalObject().setProperty("QTerm", scriptHelper);
-    if (!m_param.m_bLoadScript)
+	if (!m_param.m_mapParam["loadscript"].toBool())
         return;
     m_pBBS->setScript(m_scriptEngine, m_scriptHelper);
-    m_scriptHelper->loadScript(m_param.m_strScriptFile);
+    m_scriptHelper->loadScript(m_param.m_mapParam["scriptfile"].toString());
     QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("init");
     if (!func.isFunction()) {
         qDebug() << "init is not a function";
@@ -1605,6 +1630,20 @@ void Window::initScript()
 #endif // SCRIPT_ENABLED
 }
 
+void Window::runScript(const QString & filename)
+{
+#ifdef SCRIPT_ENABLED
+    QString file = filename;
+    if (file.isEmpty()){
+        // get the previous dir
+        file= Global::instance()->getOpenFileName("Script Files (*.js *.txt)", this);
+    }
+    if (file.isEmpty())
+        return;
+
+    m_scriptHelper->loadScriptFile(file);
+#endif
+}
 void Window::inputHandle(const QString & text)
 {
     if (text.length() > 0) {
@@ -1693,7 +1732,7 @@ QMenu * Window::urlMenu()
 void Window::updateWindow()
 {
 #ifdef SCRIPT_ENABLED
-    if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+    if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
         m_scriptHelper->setAccepted(false);
         QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("onNewData");
         if (func.isFunction()) {
@@ -1755,21 +1794,19 @@ void Window::updateWindow()
                 delete m_pSound;
                 m_pSound = NULL;
             }
-            if (Global::instance()->m_pref.bBlinkTab)
-                m_tabTimer->start(500);
 
             QString strMsg = m_pBBS->getMessage();
             if (!strMsg.isEmpty())
                 m_strMessage += strMsg + "\n\n";
 
 
-            if (!isActiveWindow() || m_pFrame->wndmgr->activeWindow() != this)
+            if (!isActiveWindow()) 
             {
                 showMessage("New Message in QTerm", strMsg, -1);
             }
         if (m_bAutoReply) {
 #ifdef SCRIPT_ENABLED
-            if (m_scriptEngine != NULL && m_param.m_bLoadScript) {
+            if (m_scriptEngine != NULL && m_param.m_mapParam["loadscript"].toBool()) {
                 m_scriptHelper->setAccepted(false);
                 QScriptValue func = m_scriptEngine->globalObject().property("QTerm").property("autoReply");
                 if (func.isFunction()) {
@@ -1781,7 +1818,7 @@ void Window::updateWindow()
                         if (m_bIdling)
                             replyMessage();
                         else
-                            m_replyTimer->start(m_param.m_nMaxIdle*1000 / 2);
+                            m_replyTimer->start(m_param.m_mapParam["maxidle"].toInt()*1000 / 2);
                     }
                 } else {
                     qDebug("autoReply is not a function");
@@ -1802,8 +1839,7 @@ void Window::updateWindow()
     m_pBBS->updateUrlList();
     //m_updateTimer->start(100);
     //refresh screen
-    m_pScreen->m_ePaintState = Screen::NewData;
-    m_pScreen->repaint();
+    m_pScreen->updateRegion();
     m_bMessage = false;
 }
 
@@ -1838,6 +1874,28 @@ void Window::loadKeyboardTranslator(const QString & filename)
         return;
     }
     qDebug() << "Keyboard translator:" << name << "loaded";
+}
+
+void Window :: groupActions() 
+{
+	listActions << "actionDisconnect"
+        << "actionPrint" << "actionPrint_Preview"
+		<< "actionRefresh"
+		<< "actionPallete" << "actionUnderline" << "actionBlink" << "actionSymbols"
+        << "actionCopy" << "actionPaste" 
+        << "actionAuto_Copy" << "actionCopy_w_Color"
+		<< "actionRectangle_Selection" << "actionPaste_w_Wordwrap"
+		<< "actionAnti_idle" << "actionAuto_Reply"
+		<< "actionCopy_Article"
+        << "actionView_Message" << "actionBoss_Color"
+		<< "actionDebug_Console" << "actionRun" << "actionStop" << "actionReload_Script"
+		<< "actionCurrent_Session_Setting";
+	mapToggleStates["actionAuto_Copy"]    = &m_bAutoCopy;
+	mapToggleStates["actionCopy_w_Color"] = &m_bColorCopy;
+	mapToggleStates["actionRectangle_Selection"] = &m_bRectCopy;
+	mapToggleStates["actionPast_w_Wordwrap"] = &m_bWordWrap;
+	mapToggleStates["actionAnti_Idle"]  = &m_bAntiIdle;
+	mapToggleStates["actionAuto_Reply"] = &m_bAutoReply;
 }
 
 }
