@@ -16,7 +16,7 @@ ToolbarDialog::ToolbarDialog(QWidget* parent)
     QList<QAction*> actions = parent->findChildren<QAction*>(QRegExp("action*"));
     QAction* action;
     foreach(action, actions) {
-        if (action->actionGroup() != 0)
+        if (action->actionGroup()->objectName() != "extraGroup")
             continue;
         QListWidgetItem* item = new QListWidgetItem(action->toolTip());
         item->setIcon(action->icon());
@@ -31,7 +31,7 @@ ToolbarDialog::ToolbarDialog(QWidget* parent)
     int index = 0;
     foreach(toolbar, toolbars) {
         index = (int)(toolbar->iconSize().height()/10)-1;
-        if (toolbar->objectName() != "customKeyToolBar")
+        if (toolbar->objectName() != "keyToolBar")
             comboToolbars->addItem(toolbar->windowTitle(), QVariant::fromValue((QObject*)toolbar));
     }
     comboToolbarsCurrentIndexChanged(0);
@@ -216,11 +216,11 @@ void ToolbarDialog::createDefaultToolBars()
 {
     QStringList listActions;
     listActions << "actionQuickConnect";
-    m_defaultToolBars.insert("mainToolBar", listActions);
+    m_defaultToolBars.insert("terminalToolBar", listActions);
 
     listActions.clear();
     listActions << "actionDisconnect" << "Separator" << "actionCopy" << "actionPaste" << "actionRect" << "actionColorCopy" << "Separator" << "actionAppearance" << "actionRefresh" << "Separator" << "actionCurrentSession" << "Separator" << "actionCopyArticle" << "actionAntiIdle" << "actionAutoReply" << "actionViewMessage" << "actionMouse" << "actionBeep" << "actionReconnect";
-    m_defaultToolBars.insert("bbsOperationsToolBar", listActions);
+    m_defaultToolBars.insert("mainToolBar", listActions);
 }
 
 void ToolbarDialog::restoreDefaultToolbars()

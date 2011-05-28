@@ -127,11 +127,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 int main( int argc, char ** argv )
 {
-
     if ( strcmp( qVersion(), QT_MIN_VERSION ) < 0 ) {
         qFatal("QTerm requires Qt %s or above to run! Qt installed in your system is %s.", QT_MIN_VERSION, qVersion());
     }
-    QApplication::setGraphicsSystem("raster");
+    //QApplication::setGraphicsSystem("raster");
 
     QApplication a( argc, argv );
     a.setApplicationName("QTerm");
@@ -145,12 +144,13 @@ int main( int argc, char ** argv )
         return -1;
     }
 
+
     // Registrate the new codec
     UAOCodec hackCodec;
 
     QTerm::Frame * mw = new QTerm::Frame();
     mw->setWindowTitle( "QTerm "+QString(QTERM_VERSION) );
-    mw->setWindowIcon( QPixmap(Global::instance()->pathLib()+"pic/qterm.png") );
+    mw->setWindowIcon( QIcon(":/pic/qterm.png") );
     mw->show();
     a.connect( &a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()) );
     a.connect( &a, SIGNAL(commitDataRequest(QSessionManager &)), mw, SLOT(saveAndDisconnect()), Qt::DirectConnection);

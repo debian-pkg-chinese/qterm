@@ -17,13 +17,13 @@ AUTHOR:        kingson fiasco
 #include "qtermbuffer.h"
 #include "qtermbbs.h"
 #include "qtermframe.h"
-#include "qtermwndmgr.h"
 #include "qtermparam.h"
 #include "qtermtelnet.h"
 #include "qtermconfig.h"
 #include "qtermglobal.h"
 #include "schemedialog.h"
 #include "osdmessage.h"
+#include "blur.h"
 
 #include <QApplication>
 #include <QPainter>
@@ -111,7 +111,7 @@ Screen::Screen(QWidget *parent, Buffer *buffer, Param *param, BBS *bbs)
 
 // init variable
     m_blinkScreen = false;
-    m_blinkCursor = true;
+    m_blinkCursor = m_pParam->m_mapParam["blinkcursor"].toBool();
 
 }
 
@@ -132,12 +132,10 @@ Screen::~Screen()
 // focus event received
 void Screen::focusInEvent(QFocusEvent *)
 {
-    if (m_pWindow->isMaximized() && m_pWindow->m_pFrame->wndmgr->afterRemove()) {
+    if (m_pWindow->isMaximized()) {
         m_pWindow->showNormal();
         m_pWindow->showMaximized();
     }
-
-    m_pWindow->m_pFrame->wndmgr->activateTheTab(m_pWindow);
 
     m_scPrevPage->setEnabled(true);
     m_scNextPage->setEnabled(true);
@@ -166,7 +164,23 @@ void Screen::cursorEvent()
     if (m_blinkCursor) {
         m_ePaintState = Cursor;
         m_bCursor = !m_bCursor;
-        update();
+        QRect cursorRect;
+        QPoint pt = mapToPixel(QPoint(m_pBuffer->caretX(), m_pBuffer->caretY()));
+        switch (m_pParam->m_mapParam["cursor"].toInt()) {
+        case 0:
+            cursorRect.setRect(pt.x(), pt.y(), m_nCharWidth, m_nCharHeight);
+            break;
+        case 1:
+            cursorRect.setRect(pt.x(), pt.y() + 9*m_nCharHeight / 10, m_nCharWidth, m_nCharHeight / 10);
+            break;
+        case 2:
+            cursorRect.setRect(pt.x(), pt.y(), m_nCharWidth / 9, m_nCharHeight);
+            break;
+        default:
+            qDebug("Unknown cursor type");
+            break;
+        }
+        update(cursorRect);
     }
 }
 
@@ -180,7 +194,7 @@ void Screen::updateCursor()
         int linelength = m_pBuffer->at(m_pBuffer->caretY())->getLength();
         int startx = m_pBuffer->caretX();
 
-        switch (m_pParam->m_nCursorType) {
+		switch (m_pParam->m_mapParam["cursor"].toInt()) {
         case 0: // block
             if (startx < linelength) {
                 drawLine(painter, m_pBuffer->caretY(), startx, startx, false);
@@ -215,14 +229,10 @@ void Screen::blinkEvent()
     if (m_hasBlink) {
         m_blinkScreen = !m_blinkScreen;
         m_ePaintState = Blink;
-        update();
+        update(m_blinkRegion);
     }
 }
 
-void Screen::moveEvent(QMoveEvent *)
-{
-// setBgPxm( m_pxmBg, m_nPxmType );
-}
 void Screen::resizeEvent(QResizeEvent *)
 {
     updateScrollBar();
@@ -234,7 +244,7 @@ void Screen::resizeEvent(QResizeEvent *)
 //  }
 //  m_pCanvas = new QPixmap(width(), height());
 
-    if (m_pParam->m_bAutoFont) {
+	if (m_pParam->m_mapParam["autofont"].toBool()) {
         updateFont();
     } else {
         int cx = m_rcClient.width() / m_nCharWidth;
@@ -245,59 +255,8 @@ void Screen::resizeEvent(QResizeEvent *)
     }
     m_ePaintState = Show;
     update();
+    QTimer::singleShot(50,this,SLOT(blurBackground()));
 }
-
-/* ------------------------------------------------------------------------ */
-/*                                                                         */
-/*                           Mouse                                          */
-/*                                                                          */
-/* ------------------------------------------------------------------------ */
-void Screen::enterEvent(QEvent * e)
-{
-    QApplication::sendEvent(m_pWindow, e);
-}
-
-void Screen::leaveEvent(QEvent * e)
-{
-    QApplication::sendEvent(m_pWindow, e);
-}
-
-void Screen::mousePressEvent(QMouseEvent * me)
-{
-    setFocus();
-
-    m_pWindow->mousePressEvent(me);
-    //QApplication::sendEvent(m_pWindow, me);
-
-}
-void Screen::mouseMoveEvent(QMouseEvent * me)
-{
-#ifdef Q_OS_MACX
-    m_pWindow->mouseMoveEvent(me);
-#else
-    m_pWindow->mouseMoveEvent(me);
-    //QApplication::sendEvent(m_pWindow, me);
-#endif
-}
-
-void Screen::mouseReleaseEvent(QMouseEvent * me)
-{
-    m_pWindow->mouseReleaseEvent(me);
-    //QApplication::sendEvent(m_pWindow, me);
-}
-
-void Screen::wheelEvent(QWheelEvent * we)
-{
-    if (Global::instance()->m_pref.bWheel)
-        QApplication::sendEvent(m_pWindow, we);
-    else {
-        int old_value = m_scrollBar->value();
-        int step = m_scrollBar->singleStep()*we->delta()/8/15;
-        m_scrollBar->setValue(old_value-step);
-        we->accept();
-    }
-}
-
 
 /* ------------------------------------------------------------------------ */
 /*                                                                         */
@@ -313,8 +272,10 @@ void Screen::initFontMetrics()
     if (m_pGeneralFont != NULL) {
         delete m_pGeneralFont;
     }
-    m_pASCIIFont = new QFont(m_pParam->m_strASCIIFontName, qMax(8, m_pParam->m_nFontSize));
-    m_pGeneralFont = new QFont(m_pParam->m_strGeneralFontName, qMax(8, m_pParam->m_nFontSize));
+	m_pASCIIFont = new QFont(m_pParam->m_mapParam["asciifont"].toString(), 
+						qMax(8, m_pParam->m_mapParam["fontsize"].toInt()));
+    m_pGeneralFont = new QFont(m_pParam->m_mapParam["generalfont"].toString(), 
+						qMax(8, m_pParam->m_mapParam["fontsize"].toInt()));
 
     m_pASCIIFont->setWeight(QFont::Normal);
     m_pGeneralFont->setWeight(QFont::Normal);
@@ -393,8 +354,8 @@ void Screen::asciiFontChanged(const QFont & font)
         delete m_pASCIIFont;
     }
     m_pASCIIFont = new QFont(font);
-    m_pASCIIFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
-    m_pGeneralFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
+    m_pASCIIFont->setPixelSize(qMax(8,m_pParam->m_mapParam["fontsize"].toInt()));
+    m_pGeneralFont->setPixelSize(qMax(8,m_pParam->m_mapParam["fontsize"].toInt()));
     QResizeEvent* re = new QResizeEvent(size(), size());
     resizeEvent(re);
 }
@@ -405,8 +366,8 @@ void Screen::generalFontChanged(const QFont & font)
         delete m_pGeneralFont;
     }
     m_pGeneralFont = new QFont(font);
-    m_pASCIIFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
-    m_pGeneralFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
+    m_pASCIIFont->setPixelSize(qMax(8,m_pParam->m_mapParam["fontsize"].toInt()));
+    m_pGeneralFont->setPixelSize(qMax(8,m_pParam->m_mapParam["fontsize"].toInt()));
     m_pMessage->setFont(*m_pGeneralFont);
     QResizeEvent* re = new QResizeEvent(size(), size());
     resizeEvent(re);
@@ -414,9 +375,9 @@ void Screen::generalFontChanged(const QFont & font)
 
 void Screen::fontSizeChanged(int value)
 {
-    m_pParam->m_nFontSize = value;
-    m_pASCIIFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
-    m_pGeneralFont->setPixelSize(qMax(8,m_pParam->m_nFontSize));
+    m_pParam->m_mapParam["fontsize"] = value;
+    m_pASCIIFont->setPixelSize(qMax(8,value));
+    m_pGeneralFont->setPixelSize(qMax(8,value));
     QResizeEvent* re = new QResizeEvent(size(), size());
     resizeEvent(re);
 }
@@ -433,7 +394,7 @@ QFont Screen::generalFont()
 
 int Screen::fontSize()
 {
-    return m_pParam->m_nFontSize;
+    return m_pParam->m_mapParam["fontsize"].toInt();
 }
 
 /* ------------------------------------------------------------------------ */
@@ -464,12 +425,12 @@ void Screen::setScheme()
     m_nPxmType = 0;
 
 
-
+	QString strSchemeFile = m_pParam->m_mapParam["schemefile"].toString();
 // if we have scheme defined
-    if (QFile::exists(m_pParam->m_strSchemeFile)) {
+    if (QFile::exists(strSchemeFile)) {
 
-//  printf("scheme %s loaded sucessfully\n", m_pParam->m_strSchemeFile);
-        Config *pConf = new Config(m_pParam->m_strSchemeFile);
+//  printf("scheme %s loaded sucessfully\n", strSchemeFile);
+        Config *pConf = new Config(strSchemeFile);
 
         m_color[0].setNamedColor(pConf->getItemValue("color", "color0").toString());
         m_color[1].setNamedColor(pConf->getItemValue("color", "color1").toString());
@@ -490,6 +451,7 @@ void Screen::setScheme()
 
         delete pConf;
     }
+    m_color[0].setAlphaF(m_pParam->m_mapParam["opacity"].toInt()/100.0);
 }
 
 void Screen::schemeChanged(int index)
@@ -498,8 +460,15 @@ void Screen::schemeChanged(int index)
         return;
     }
     QStringList schemeList = schemeDialog::loadSchemeList();
-    m_pParam->m_strSchemeFile = schemeList[index];
+    m_pParam->m_mapParam["schemefile"] = schemeList[index];
     setScheme();
+    QResizeEvent* re = new QResizeEvent(size(), size());
+    resizeEvent(re);
+}
+
+void Screen::opacityChanged(int val)
+{
+    m_color[0].setAlphaF(val/100.0);
     QResizeEvent* re = new QResizeEvent(size(), size());
     resizeEvent(re);
 }
@@ -513,29 +482,24 @@ void Screen::schemeChanged(int index)
 void Screen::prevPage()
 {
     scrollLine(-m_pBuffer->line());
-    m_ePaintState = NewData;
-    update();
 }
 
 void Screen::nextPage()
 {
     scrollLine(m_pBuffer->line());
-    m_ePaintState = NewData;
-    update();
+
 }
 
 void Screen::prevLine()
 {
     scrollLine(-1);
-    m_ePaintState = NewData;
-    update();
+
 }
 
 void Screen::nextLine()
 {
     scrollLine(1);
-    m_ePaintState = NewData;
-    update();
+
 }
 
 void Screen::scrollLine(int delta)
@@ -560,6 +524,7 @@ void Screen::scrollLine(int delta)
     for (int i = m_nStart; i <= m_nEnd; i++)
         m_pBuffer->at(i)->setChanged(-1, -1);
 
+    updateRegion();
 }
 void Screen::scrollChanged(int value)
 {
@@ -579,9 +544,7 @@ void Screen::scrollChanged(int value)
     for (int i = m_nStart; i <= m_nEnd; i++)
         m_pBuffer->at(i)->setChanged(-1, -1);
 
-    m_ePaintState = NewData;
-    update();
-
+    updateRegion();
 }
 
 void Screen::updateScrollBar()
@@ -729,6 +692,7 @@ void Screen::blinkScreen()
                     startx = i;
                     while (i < linelength && GETBLINK(attr.at(i)))
                         ++i;
+                    painter.fillRect(mapToRect(startx, index, i-startx, 1), QBrush(m_color[0]));
                     --i;
                     drawLine(painter, index, startx, i, false);
                 }
@@ -754,6 +718,8 @@ void Screen::refreshScreen()
     int startx, endx;
 
     QPainter painter;
+    QRegion blinkRegion;
+
     painter.begin(this);
     //qDebug("size: %d, %d", width(),height());
     if (m_ePaintState == Show)
@@ -766,17 +732,28 @@ void Screen::refreshScreen()
             return;
         }
 
+        TextLine *pTextLine = m_pBuffer->at(index);
+        if (pTextLine->hasBlink()) {
+            m_hasBlink = true;
+            m_pBlinkLine[index - m_nStart] = true;
+            uint linelength = pTextLine->getLength();
+            QByteArray attr = pTextLine->getAttr();
+            for (uint i = 0; i < linelength; ++i) {
+                if (GETBLINK(attr.at(i))) {
+                    startx = i;
+                    while (i < linelength && GETBLINK(attr.at(i)))
+                        ++i;
+                    blinkRegion += mapToRect(startx, index, i-startx, 1);
+                }
+            }
+        } else
+            m_pBlinkLine[index - m_nStart] = false;
+
         if (m_ePaintState == Show) {
             drawLine(painter, index, 0, -1);
             continue;
         }
 
-        TextLine *pTextLine = m_pBuffer->at(index);
-        if (pTextLine->hasBlink()) {
-            m_hasBlink = true;
-            m_pBlinkLine[index - m_nStart] = true;
-        } else
-            m_pBlinkLine[index - m_nStart] = false;
         if (!pTextLine->isChanged(startx, endx))
             continue;
 
@@ -790,6 +767,7 @@ void Screen::refreshScreen()
         pTextLine->clearChange();
     }
     painter.end();
+    m_blinkRegion = blinkRegion;
 
     updateMicroFocus();
     if (m_pWindow->isConnected()) {
@@ -804,6 +782,11 @@ void Screen::refreshScreen()
     if (m_hasBlink) m_blinkTimer->start(1000);
 }
 
+void Screen::blurBackground()
+{
+    if (m_pParam->m_mapParam["opacity"].toInt() < 100)
+        BlurHelper().updateBlurRegion(Frame::instance(), Frame::instance()->rect());
+}
 
 void Screen::paintEvent(QPaintEvent * pe)
 {
@@ -869,7 +852,7 @@ void Screen::repaintScreen(QPaintEvent * pe)
 
     for (int y = tlPoint.y(); y <= brPoint.y(); y++) {
         drawLine(painter, y);
-        //if( m_pBBS->isSelected(y)&&m_pParam->m_nMenuType==1 )
+        //if( m_pBBS->isSelected(y)&&m_pParam->m_mapParam["menutype"].toInt()==1 )
         //{
         // QRect rcMenu = mapToRect(m_pBBS->getSelectRect());
         // QPixmap pxm(rcMenu.width(), rcMenu.height());
@@ -908,7 +891,7 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
 
     if (endx >= linelength || endx < 0) {
         endx = qMin(m_pBuffer->columns(), linelength)-1;
-        painter.eraseRect(mapToRect(beginx, index, linelength, 1)); // Maybe we should calculate more accurate size;
+        //painter.eraseRect(mapToRect(beginx, index, linelength, 1)); // Maybe we should calculate more accurate size;
     }
     if (endx >= qMin(color.size(), attr.size())) {
         endx = qMin(color.size(), attr.size()) -1;
@@ -921,7 +904,7 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
 
     if (complete == true && m_pBBS->isSelected(index)) {
         drawMenuSelect(painter, index);
-        if (m_pParam -> m_nMenuType == 1) {
+        if (m_pParam->m_mapParam["menutype"].toInt() == 1) {
             bReverse = true;
         }
         beginx = 0;
@@ -942,7 +925,7 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
             tempcp = color.at(i);
         if (i < attr.size())
             tempea = attr.at(i);
-        bSelected = m_pBuffer->isSelected(QPoint(i, index), m_pWindow->m_bCopyRect);
+        bSelected = m_pBuffer->isSelected(QPoint(i, index), m_pWindow->m_bRectCopy);
         len = pTextLine->size(i);
         if ( (i+1) >= linelength) {
             len = 1;
@@ -962,7 +945,7 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
         //qDebug() << "startx: " << startx << " i: " << i << " string: " << strShow;
         // There should be only one.
         // TODO: Rewrite this when we want to do more than char to char convert
-        strShow = Global::instance()->convert(pTextLine->getText(startx, len), (Global::Conversion)m_pParam->m_nDispCode);
+        strShow = Global::instance()->convert(pTextLine->getText(startx, len), (Global::Conversion)m_pParam->m_mapParam["displaycode"].toInt());
 
         if (strShow.isEmpty()) {
             qDebug("drawLine: empty string?");
@@ -973,17 +956,13 @@ void Screen::drawLine(QPainter& painter, int index, int beginx, int endx, bool c
         if (charWidth <= 0) {
             qDebug("drawLine: non printable char");
             continue;
-        } else if (charWidth == 1) {
-            painter.setFont(*m_pASCIIFont);
-        } else if (charWidth == 2) {
-            painter.setFont(*m_pGeneralFont);
         }
         CharFlags flags = RenderAll;
         if ( pTextLine->isPartial(startx) ) {
             flags = RenderRight;
             charWidth = 1;
         } else if ( charWidth == 2) {
-            if (tempcp != color.at(i+1) || tempea != attr.at(i+1) || bSelected != m_pBuffer->isSelected(QPoint(i+1, index), m_pWindow->m_bCopyRect)) {
+            if (tempcp != color.at(i+1) || tempea != attr.at(i+1) || bSelected != m_pBuffer->isSelected(QPoint(i+1, index), m_pWindow->m_bRectCopy)) {
                 charWidth = 1;
                 flags = RenderLeft;
             } else {
@@ -1004,18 +983,22 @@ void Screen::drawStr(QPainter& painter, const QString& str, int x, int y, int le
     char ea = GETATTR(attribute);
 
     // test bold mask or always highlighted
-    if (GETBOLD(ea) || m_pParam->m_bAlwaysHighlight)
+    if (GETBOLD(ea) || m_pParam->m_mapParam["alwayshighlight"].toBool())
         cp = SETHIGHLIGHT(cp);             // use 8-15 color
     // test dim mask
     if (GETDIM(ea)) {
     };
     // test underline mask
+    QFont asciiFont = *m_pASCIIFont;
+    QFont generalFont = *m_pGeneralFont;
     if (GETUNDERLINE(ea)) {
-        m_pASCIIFont->setUnderline(true);
-        m_pGeneralFont->setUnderline(true);
-    } else {
-        m_pASCIIFont->setUnderline(false);
-        m_pGeneralFont->setUnderline(false);
+        asciiFont.setUnderline(true);
+        generalFont.setUnderline(true);
+    }
+    if (length == 1) {
+       painter.setFont(asciiFont);
+    } else if (length == 2) {
+       painter.setFont(generalFont);
     }
     // test blink mask
     if (GETBLINK(ea)) {
@@ -1045,31 +1028,38 @@ void Screen::drawStr(QPainter& painter, const QString& str, int x, int y, int le
         return;
     }
 
-    painter.setPen(m_color[m_pParam->m_bAnsiColor||GETFG(cp)==0?GETFG(cp):7]);
+    painter.setPen(m_color[m_pParam->m_mapParam["ansicolor"].toBool()||GETFG(cp)==0?GETFG(cp):7]);
 
     if (GETBG(cp) != 0 && !transparent) {
         painter.setBackgroundMode(Qt::OpaqueMode);
-        painter.setBackground(m_color[m_pParam->m_bAnsiColor||GETBG(cp)==7?GETBG(cp):0]);
+        painter.setBackground(m_color[m_pParam->m_mapParam["ansicolor"].toBool()||GETBG(cp)==7?GETBG(cp):0]);
 
     } else
         painter.setBackgroundMode(Qt::TransparentMode);
 
-
     if (m_blinkScreen && GETBLINK(GETATTR(attribute))) {
         if (GETBG(cp) != 0)
             painter.fillRect(mapToRect(x, y, length, 1), QBrush(m_color[GETBG(cp)]));
-        else
-            painter.eraseRect(mapToRect(x, y, length, 1));
     } else {
         if (GETBG(cp) != 0 || m_ePaintState == Cursor)
             painter.fillRect(mapToRect(x, y, length, 1), QBrush(m_color[GETBG(cp)]));
         if (flags == RenderAll) {
-            painter.drawText(pt.x()+m_nCharDelta, pt.y(), m_nCharWidth*length, m_nCharHeight, Qt::AlignLeft|Qt::AlignBottom, str);
-        } else if (flags == RenderLeft) {
-            painter.drawText(pt.x()+m_nCharDelta, pt.y(), m_nCharWidth-m_nCharDelta, m_nCharHeight, Qt::AlignLeft|Qt::AlignBottom, str);
-        } else if (flags == RenderRight) {
-            int width = painter.fontMetrics().width(str[0])-m_nCharWidth+m_nCharDelta;
-            painter.drawText(pt.x(), pt.y(), width, m_nCharHeight, Qt::AlignRight|Qt::AlignBottom, str);
+            //painter.fillRect(mapToRect(x, y, length, 1), QBrush(m_color[0]));
+            painter.drawText(pt.x(), pt.y(), m_nCharWidth*length, m_nCharHeight, Qt::AlignCenter, str);
+        } else {
+            QPixmap pm = QPixmap(m_nCharWidth*2, m_nCharHeight);
+            QPainter p(&pm);
+            p.fillRect(0, 0, pm.width(), pm.height(), m_color[GETBG(cp)]);
+            p.setPen(m_color[GETFG(cp)]);
+            p.setFont(painter.font());
+            p.drawText(0, 0, m_nCharWidth*2, m_nCharHeight, Qt::AlignCenter, str);
+            p.end();
+            if (flags == RenderLeft) {
+                painter.drawPixmap(pt.x(), pt.y(), pm, 0, 0, m_nCharWidth, m_nCharHeight);
+            }
+            if (flags == RenderRight) {
+                painter.drawPixmap(pt.x(), pt.y(), pm, m_nCharWidth, 0, m_nCharWidth, m_nCharHeight);
+            }
         }
     }
     painter.setBackground(QBrush(m_color[0]));
@@ -1093,7 +1083,7 @@ void Screen::drawMenuSelect(QPainter& painter, int index)
 {
     QRect rcSelect, rcMenu, rcInter;
     if (m_pBuffer->isSelected(index)) {
-        rcSelect = mapToRect(m_pBuffer->getSelectRect(index, m_pWindow->m_bCopyRect));
+        rcSelect = mapToRect(m_pBuffer->getSelectRect(index, m_pWindow->m_bRectCopy));
         if (Global::instance()->isBossColor())
             painter.fillRect(rcSelect, Qt::black);
         else
@@ -1102,15 +1092,34 @@ void Screen::drawMenuSelect(QPainter& painter, int index)
 
     if (m_pBBS->isSelected(index)) {
         rcMenu = mapToRect(m_pBBS->getSelectRect().intersected(QRect(0,index,m_pBuffer->columns(), 1)));
-        switch (m_pParam->m_nMenuType) {
+        switch (m_pParam->m_mapParam["menutype"].toInt()) {
         case 0: // underline
             painter.fillRect(rcMenu.x(), rcMenu.y() + 10*m_nCharHeight / 11, rcMenu.width(), m_nCharHeight / 11, m_color[7]);
             break;
         case 2:
-            painter.fillRect(rcMenu, QBrush(m_pParam->m_clrMenu));
+            painter.fillRect(rcMenu, QBrush(m_pParam->m_mapParam["menucolor"].value<QColor>()));
             break;
         }
     }
+}
+
+void Screen::updateRegion()
+{
+    int startx, endx;
+
+    m_ePaintState = NewData;
+    QRegion paintRegion;
+    for (int index = m_nStart; index <= m_nEnd; index++) {
+        TextLine *pTextLine = m_pBuffer->at(index);
+        if (!pTextLine->isChanged(startx, endx))
+            continue;
+        if (startx > 0 && pTextLine->isPartial(startx)) {
+            startx -= 1;
+        }
+
+        paintRegion += mapToRect(startx, index, -1, 1);
+    }
+    update(paintRegion);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1147,12 +1156,15 @@ QPoint Screen::mapToChar(const QPoint& point)
 
 QRect Screen::mapToRect(int x, int y, int width, int height)
 {
-    QPoint pt = mapToPixel(QPoint(x, y));
+    int px = x < 0 ? 0 : x;
+    int py = y < 0 ? 0 : y;
+
+    QPoint pt = mapToPixel(QPoint(px, py));
 
     if (width == -1)  // to the end
-        return QRect(pt.x()+m_nCharDelta, pt.y(), size().width() , m_nCharHeight*height);
+        return QRect(pt.x(), pt.y(), size().width() , m_nCharHeight*height);
     else
-        return QRect(pt.x()+m_nCharDelta, pt.y(), width*m_nCharWidth, m_nCharHeight*height);
+        return QRect(pt.x(), pt.y(), width*m_nCharWidth, m_nCharHeight*height);
 }
 
 QRect Screen::mapToRect(const QRect& rect)

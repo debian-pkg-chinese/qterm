@@ -449,6 +449,9 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>65535</number>
+     </property>
     </widget>
    </widget>
    <widget class="QWidget" name="tab1">
@@ -459,7 +462,7 @@
      <property name="geometry">
       <rect>
        <x>150</x>
-       <y>210</y>
+       <y>240</y>
        <width>371</width>
        <height>32</height>
       </rect>
@@ -478,7 +481,7 @@
      <property name="geometry">
       <rect>
        <x>150</x>
-       <y>290</y>
+       <y>320</y>
        <width>371</width>
        <height>32</height>
       </rect>
@@ -491,7 +494,7 @@
      <property name="geometry">
       <rect>
        <x>150</x>
-       <y>250</y>
+       <y>280</y>
        <width>371</width>
        <height>32</height>
       </rect>
@@ -504,7 +507,7 @@
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>370</y>
+       <y>390</y>
        <width>140</width>
        <height>32</height>
       </rect>
@@ -523,7 +526,7 @@
      <property name="geometry">
       <rect>
        <x>150</x>
-       <y>370</y>
+       <y>390</y>
        <width>381</width>
        <height>31</height>
       </rect>
@@ -548,7 +551,7 @@
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>410</y>
+       <y>470</y>
        <width>140</width>
        <height>32</height>
       </rect>
@@ -567,7 +570,7 @@
      <property name="geometry">
       <rect>
        <x>150</x>
-       <y>410</y>
+       <y>470</y>
        <width>251</width>
        <height>31</height>
       </rect>
@@ -592,7 +595,7 @@
      <property name="geometry">
       <rect>
        <x>410</x>
-       <y>410</y>
+       <y>470</y>
        <width>120</width>
        <height>31</height>
       </rect>
@@ -646,7 +649,7 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>330</y>
+       <y>350</y>
        <width>521</width>
        <height>34</height>
       </rect>
@@ -709,9 +712,7 @@
       <set>QFontComboBox::AllFonts</set>
      </property>
      <property name="currentFont">
-      <font>
-       <family>Andale Mono</family>
-      </font>
+      <font/>
      </property>
     </widget>
     <widget class="QSpinBox" name="fontSizeSpinBox">
@@ -821,6 +822,95 @@
      </property>
      <property name="text">
       <string>Configure...</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="TextLabel3_23">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>210</y>
+       <width>140</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Opacity:</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+     <property name="buddy">
+      <cstring>schemeComboBox</cstring>
+     </property>
+    </widget>
+    <widget class="QSlider" name="opacityHorizontalSlider">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>215</y>
+       <width>311</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="maximum">
+      <number>100</number>
+     </property>
+     <property name="value">
+      <number>100</number>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+    <widget class="QLabel" name="TextLabel3_24">
+     <property name="geometry">
+      <rect>
+       <x>470</x>
+       <y>210</y>
+       <width>31</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>100</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+     <property name="buddy">
+      <cstring>schemeComboBox</cstring>
+     </property>
+    </widget>
+    <widget class="QLabel" name="TextLabel3_25">
+     <property name="geometry">
+      <rect>
+       <x>500</x>
+       <y>210</y>
+       <width>21</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>%</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="buddy">
+      <cstring>schemeComboBox</cstring>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="blinkCursorCheckBox">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>430</y>
+       <width>371</width>
+       <height>32</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Blink cursor</string>
      </property>
     </widget>
    </widget>
@@ -1022,6 +1112,12 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="minimum">
+      <number>5</number>
+     </property>
+     <property name="maximum">
+      <number>500</number>
+     </property>
     </widget>
     <widget class="QSpinBox" name="rowSpinBox">
      <property name="geometry">
@@ -1032,6 +1128,12 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="minimum">
+      <number>5</number>
+     </property>
+     <property name="maximum">
+      <number>500</number>
+     </property>
     </widget>
     <widget class="QSpinBox" name="scrollSpinBox">
      <property name="geometry">
@@ -1041,6 +1143,9 @@
        <width>331</width>
        <height>32</height>
       </rect>
+     </property>
+     <property name="maximum">
+      <number>10000</number>
      </property>
     </widget>
    </widget>
@@ -1538,7 +1643,7 @@
       </rect>
      </property>
      <property name="text">
-      <string>Reconnect Delay (sec):</string>
+      <string>Reconnect Delay (s):</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1661,18 +1766,36 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>65535</number>
+     </property>
     </widget>
    </widget>
   </widget>
-  <widget class="QListWidget" name="nameListWidget">
+  <widget class="QTreeView" name="nameTreeView">
    <property name="geometry">
     <rect>
      <x>10</x>
      <y>10</y>
      <width>201</width>
-     <height>541</height>
+     <height>581</height>
     </rect>
    </property>
+   <property name="contextMenuPolicy">
+    <enum>Qt::CustomContextMenu</enum>
+   </property>
+   <property name="dragEnabled">
+    <bool>true</bool>
+   </property>
+   <property name="dragDropMode">
+    <enum>QAbstractItemView::DragDrop</enum>
+   </property>
+   <property name="selectionMode">
+    <enum>QAbstractItemView::ExtendedSelection</enum>
+   </property>
+   <attribute name="headerVisible">
+    <bool>false</bool>
+   </attribute>
   </widget>
   <widget class="QPushButton" name="resetPushButton">
    <property name="geometry">
@@ -1685,50 +1808,6 @@
    </property>
    <property name="text">
     <string>Reset</string>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="deletePushButton">
-   <property name="geometry">
-    <rect>
-     <x>120</x>
-     <y>562</y>
-     <width>91</width>
-     <height>31</height>
-    </rect>
-   </property>
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
-   </property>
-   <property name="text">
-    <string>Delete</string>
-   </property>
-   <property name="shortcut">
-    <string/>
-   </property>
-   <property name="autoDefault">
-    <bool>true</bool>
-   </property>
-  </widget>
-  <widget class="QPushButton" name="addPushButton">
-   <property name="geometry">
-    <rect>
-     <x>12</x>
-     <y>562</y>
-     <width>72</width>
-     <height>31</height>
-    </rect>
-   </property>
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
-   </property>
-   <property name="text">
-    <string>Add</string>
    </property>
   </widget>
   <widget class="QPushButton" name="applyPushButton">
@@ -1789,7 +1868,7 @@
  <layoutdefault spacing="6" margin="11"/>
  <pixmapfunction>qPixmapFromMimeSource</pixmapfunction>
  <tabstops>
-  <tabstop>nameListWidget</tabstop>
+  <tabstop>nameTreeView</tabstop>
   <tabstop>tabWidget</tabstop>
   <tabstop>nameLineEdit</tabstop>
   <tabstop>addrLineEdit</tabstop>
@@ -1840,8 +1919,6 @@
   <tabstop>applyPushButton</tabstop>
   <tabstop>closePushButton</tabstop>
   <tabstop>resetPushButton</tabstop>
-  <tabstop>addPushButton</tabstop>
-  <tabstop>deletePushButton</tabstop>
  </tabstops>
  <resources/>
  <connections>
@@ -1916,8 +1993,8 @@
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>614</x>
-     <y>122</y>
+     <x>618</x>
+     <y>120</y>
     </hint>
     <hint type="destinationlabel">
      <x>612</x>
@@ -1964,8 +2041,8 @@
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>563</x>
-     <y>322</y>
+     <x>567</x>
+     <y>320</y>
     </hint>
     <hint type="destinationlabel">
      <x>532</x>
@@ -2018,6 +2095,22 @@
     <hint type="destinationlabel">
      <x>516</x>
      <y>431</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>opacityHorizontalSlider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>TextLabel3_24</receiver>
+   <slot>setNum(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>648</x>
+     <y>271</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>716</x>
+     <y>271</y>
     </hint>
    </hints>
   </connection>

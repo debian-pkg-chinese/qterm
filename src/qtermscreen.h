@@ -83,6 +83,7 @@ public:
     QRect mapToRect(int, int, int, int);
     QRect mapToRect(const QRect&);
     PageViewMessage * osd();
+    void updateRegion();
 
     PaintState m_ePaintState;
 
@@ -100,11 +101,11 @@ public slots:
     void generalFontChanged(const QFont & font);
     void fontSizeChanged(int size);
     void schemeChanged(int index);
+    void opacityChanged(int val);
 
 protected:
     void initFontMetrics();
 
-    void moveEvent(QMoveEvent *);
     void resizeEvent(QResizeEvent *);
     void focusInEvent(QFocusEvent *);
     void focusOutEvent(QFocusEvent *);
@@ -112,14 +113,6 @@ protected:
     bool event(QEvent *);
 
     void paintEvent(QPaintEvent *);
-
-    // mouse
-    void enterEvent(QEvent *);
-    void leaveEvent(QEvent *);
-    void mousePressEvent(QMouseEvent *);
-    void mouseMoveEvent(QMouseEvent*);
-    void mouseReleaseEvent(QMouseEvent*);
-    void wheelEvent(QWheelEvent *);
 
     // display
     void eraseRect(QPainter& , int, int, int, int, short);
@@ -157,6 +150,7 @@ protected slots:
     void prevLine();
     void nextLine();
     void scrollLine(int);
+    void blurBackground();
 protected:
 
     QRect  m_rcClient; // the display area
@@ -212,6 +206,8 @@ protected:
     Convert m_converter;
 
     QTextCodec *m_pCodec;
+
+    QRegion m_blinkRegion;
 
     friend class Window;
 
