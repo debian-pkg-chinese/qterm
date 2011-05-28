@@ -1,9 +1,11 @@
 qterm (1:0.5.12-1) unstable; urgency=low
 
   * new upstream release.
-  * debian/control: build depends on qt4-dev-tools.
+  * debian/control:
+    - build depends on qt4-dev-tools.
+    - bump standards version to 3.9.2.
 
- -- LI Daobing <lidaobing@debian.org>  Sat, 28 May 2011 23:43:40 +0800
+ -- LI Daobing <lidaobing@debian.org>  Sat, 28 May 2011 23:54:18 +0800
 
 qterm (1:0.5.11-1) unstable; urgency=low
 
