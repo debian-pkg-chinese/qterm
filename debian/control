@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: LI Daobing <lidaobing@debian.org>
 Uploaders: Yu Guanghui <ygh@debian.org>
 Build-Depends: cdbs (>= 0.4.51), debhelper (>= 6),
- cmake (>= 2.4.2), libqt4-dev, libssl-dev
+ cmake (>= 2.4.2), libqt4-dev, libssl-dev, qt4-dev-tools
 Standards-Version: 3.8.4
 XS-Python-Version: current
 Vcs-Browser: http://git.debian.org/?p=chinese/qterm.git
