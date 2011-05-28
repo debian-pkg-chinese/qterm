@@ -4,10 +4,10 @@ qterm (1:0.5.12-1) unstable; urgency=low
     - Fix "default keyboard profile does not handle 'End' key correctly"
       (Closes: #562188)
   * debian/control:
-    - build depends on qt4-dev-tools, libqtscript4-qtbindings.
+    - build depends on qt4-dev-tools, libqtscript4-qtbindings, libx11-dev.
     - bump standards version to 3.9.2.
 
- -- LI Daobing <lidaobing@debian.org>  Sat, 28 May 2011 23:59:13 +0800
+ -- LI Daobing <lidaobing@debian.org>  Sun, 29 May 2011 00:11:28 +0800
 
 qterm (1:0.5.11-1) unstable; urgency=low
 
